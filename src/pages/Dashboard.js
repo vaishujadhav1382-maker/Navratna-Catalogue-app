@@ -421,19 +421,7 @@ const Dashboard = () => {
       </div>
       */}
 
-      {/* Permanent Banner Image (Bottom) */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.7 }}
-        className="card overflow-hidden p-0"
-      >
-        <img
-          src={require('../assets/WhatsApp Image 2025-12-15 at 12.26.00 PM.jpeg')}
-          alt="Permanent Banner"
-          className="w-full max-h-97 object-contain rounded-xl"
-        />
-      </motion.div>
+      {/* Permanent Banner Image (Bottom) removed as requested */}
     </div>
   );
 };
