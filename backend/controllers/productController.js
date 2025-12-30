@@ -44,6 +44,7 @@ exports.bulkImportProducts = async (req, res) => {
         category: product.category || '',
         subcategory: product.subcategory || '',
         description: product.description || '',
+        mrp: parseFloat(product.mrp) || 0,
         price: parseFloat(product.price) || 0,
         minPrice: parseFloat(product.minPrice) || 0,
         incentive: parseFloat(product.incentive) || 0,
@@ -181,6 +182,7 @@ exports.createProduct = async (req, res) => {
 
     const newProduct = {
       ...productData,
+      mrp: productData.mrp !== undefined ? parseFloat(productData.mrp) : 0,
       discount,
       createdAt: timestamp,
       updatedAt: timestamp
@@ -232,6 +234,9 @@ exports.updateProduct = async (req, res) => {
 
     updates.updatedAt = admin.firestore.FieldValue.serverTimestamp();
 
+    if (updates.mrp !== undefined) {
+      updates.mrp = parseFloat(updates.mrp) || 0;
+    }
     await docRef.update(updates);
 
     res.json({ 

@@ -96,6 +96,9 @@ const Catalogues = () => {
     });
     const [pdfPreview, setPdfPreview] = useState(null);
 
+    // Search state
+    const [search, setSearch] = useState("");
+
     // Toast notifications state
     const [toasts, setToasts] = useState([]);
 
@@ -213,6 +216,11 @@ const Catalogues = () => {
         );
     }
 
+    // Filtered catalogues by search
+    const filteredCatalogs = catalogs.filter(c =>
+        c.title.toLowerCase().includes(search.toLowerCase())
+    );
+
     return (
         <div className="space-y-6">
             {/* Toast Notifications */}
@@ -241,11 +249,25 @@ const Catalogues = () => {
                 </motion.button>
             </div>
 
-            {/* Catalogues List */}
-            {catalogs.length === 0 ? (
+            {/* Search Bar */}
+            <div className="flex justify-between items-center mb-2">
+                <input
+                    type="text"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    placeholder="Search by title..."
+                    className="w-full md:w-1/3 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    style={{ maxWidth: '350px' }}
+                />
+                {/* Empty right side for spacing/alignment */}
+                <div></div>
+            </div>
+
+            {/* Catalogues Table */}
+            {filteredCatalogs.length === 0 ? (
                 <div className="text-center py-12">
                     <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No catalogues yet</h3>
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No catalogues found</h3>
                     <p className="text-gray-600 dark:text-gray-400 mb-4">Upload your first catalogue to get started</p>
                     <button
                         onClick={() => setShowCreateModal(true)}
@@ -255,15 +277,54 @@ const Catalogues = () => {
                     </button>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {catalogs.map((catalog) => (
-                        <CatalogueCard
-                            key={catalog.id}
-                            catalog={catalog}
-                            onDelete={handleDeleteCatalogue}
-                            onView={handleViewCatalogue}
-                        />
-                    ))}
+                <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800 rounded-xl shadow">
+                        <thead className="bg-gray-100 dark:bg-gray-700">
+                            <tr>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Title</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Description</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Date</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">File Name</th>
+                                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                            {filteredCatalogs.map((catalog) => (
+                                <tr key={catalog.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                    <td className="px-4 py-3 font-semibold text-gray-900 dark:text-white max-w-xs truncate" title={catalog.title}>{catalog.title}</td>
+                                    <td className="px-4 py-3 text-gray-700 dark:text-gray-300 max-w-xs truncate">{catalog.description}</td>
+                                    <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{new Date(catalog.createdAt).toLocaleDateString()}</td>
+                                    <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{catalog.fileName}</td>
+                                    <td className="px-4 py-3 text-center">
+                                        <div className="flex items-center justify-center gap-2">
+                                            <button
+                                                onClick={() => handleViewCatalogue(catalog)}
+                                                className="p-1.5 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                                                title="View PDF"
+                                            >
+                                                <Eye className="w-4 h-4" />
+                                            </button>
+                                            <a
+                                                href={catalog.pdfUrl}
+                                                download={catalog.fileName}
+                                                className="p-1.5 text-green-500 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
+                                                title="Download PDF"
+                                            >
+                                                <Download className="w-4 h-4" />
+                                            </a>
+                                            <button
+                                                onClick={() => handleDeleteCatalogue(catalog.id)}
+                                                className="p-1.5 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                                title="Delete"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             )}
 
@@ -286,7 +347,6 @@ const Catalogues = () => {
                                 <X className="w-6 h-6" />
                             </button>
                         </div>
-
                         <form onSubmit={handleSubmit} className="space-y-4">
                             {/* Title */}
                             <div>
@@ -302,7 +362,6 @@ const Catalogues = () => {
                                     placeholder="Enter catalogue title"
                                 />
                             </div>
-
                             {/* Description */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -316,7 +375,6 @@ const Catalogues = () => {
                                     placeholder="Enter catalogue description (optional)"
                                 />
                             </div>
-
                             {/* PDF Upload */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -341,7 +399,6 @@ const Catalogues = () => {
                                     </label>
                                 </div>
                             </div>
-
                             {/* Submit Button */}
                             <div className="flex justify-end gap-3 pt-4">
                                 <button

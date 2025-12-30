@@ -387,15 +387,19 @@ export const AppProvider = ({ children }) => {
       setProductsLoading(true);
       setProductsError(null);
 
-      // Store only legacy Firestore fields; UI will normalize on read
+      // Store both normalized and legacy fields for compatibility
       const productData = {
-        productName: product.name,
-        bottomPrice: product.minPrice,
+        name: product.name,
+        minPrice: product.minPrice,
+        productName: product.name, // legacy
+        bottomPrice: product.minPrice, // legacy
         price: product.price,
         company: product.company,
         category: product.category,
         subcategory: product.subcategory,
         incentive: product.incentive,
+        mrp: product.mrp,
+        createdAt: new Date(),
       };
 
       const company = (product.company || 'Unknown').trim();
@@ -438,9 +442,12 @@ export const AppProvider = ({ children }) => {
 
       const productData = {
         ...updatedData,
-        productName: updatedData.name,
-        bottomPrice: updatedData.minPrice,
-        discount: discount ? parseFloat(discount) : updatedData.discount
+        name: updatedData.name,
+        minPrice: updatedData.minPrice,
+        productName: updatedData.name, // legacy
+        bottomPrice: updatedData.minPrice, // legacy
+        discount: discount ? parseFloat(discount) : updatedData.discount,
+        mrp: updatedData.mrp,
       };
 
       // Find product path from state

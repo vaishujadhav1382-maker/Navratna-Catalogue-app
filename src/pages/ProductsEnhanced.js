@@ -11,6 +11,8 @@ const ProductsEnhanced = () => {
   const [selectedCompany, setSelectedCompany] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedSubcategory, setSelectedSubcategory] = useState('');
+  // New: Filter for products added this month
+  const [filterThisMonth, setFilterThisMonth] = useState(false);
 
   // Custom dropdown open states
   const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
@@ -41,6 +43,7 @@ const ProductsEnhanced = () => {
     category: '',
     subcategory: '',
     name: '',
+    mrp: '',
     price: '',
     minPrice: '',
     incentive: '',
@@ -86,22 +89,59 @@ const ProductsEnhanced = () => {
     return all.sort();
   }, [products, subcategories, selectedCompany, selectedCategory, customSubcategories]);
 
-  // Filter products based on selections
+  // Filter products based on selections and "this month" filter
   const filteredProducts = useMemo(() => {
+    const now = new Date();
+    const thisMonth = now.getMonth();
+    const thisYear = now.getFullYear();
     return products.filter(product => {
       if (selectedCompany && product.company !== selectedCompany) return false;
       if (selectedCategory && product.category !== selectedCategory) return false;
-      
       // Smart subcategory matching - handle variations like "LED TV" matching "LED"
       if (selectedSubcategory && product.subcategory && !(
         product.subcategory.toLowerCase() === selectedSubcategory.toLowerCase() ||
         product.subcategory.toLowerCase().includes(selectedSubcategory.toLowerCase()) ||
         selectedSubcategory.toLowerCase().includes(product.subcategory.toLowerCase())
       )) return false;
-      
+      // New: filter for this month
+      if (filterThisMonth) {
+        let createdAt = product.createdAt;
+        // Firestore Timestamp object
+        if (createdAt && typeof createdAt === 'object' && typeof createdAt.seconds === 'number') {
+          createdAt = new Date(createdAt.seconds * 1000);
+        } else if (createdAt && createdAt.toDate) {
+          createdAt = createdAt.toDate();
+        } else if (typeof createdAt === 'string' || typeof createdAt === 'number') {
+          createdAt = new Date(createdAt);
+        }
+        if (!(createdAt instanceof Date) || isNaN(createdAt)) return false;
+        if (createdAt.getFullYear() !== thisYear || createdAt.getMonth() !== thisMonth) return false;
+      }
       return true;
     });
-  }, [products, selectedCompany, selectedCategory, selectedSubcategory]);
+  }, [products, selectedCompany, selectedCategory, selectedSubcategory, filterThisMonth]);
+  // New: Calculate average incentive for this month's filtered products
+  const thisMonthProducts = useMemo(() => {
+    const now = new Date();
+    const thisMonth = now.getMonth();
+    const thisYear = now.getFullYear();
+    return products.filter(product => {
+      let createdAt = product.createdAt;
+      if (createdAt && typeof createdAt === 'object' && typeof createdAt.seconds === 'number') {
+        createdAt = new Date(createdAt.seconds * 1000);
+      } else if (createdAt && createdAt.toDate) {
+        createdAt = createdAt.toDate();
+      } else if (typeof createdAt === 'string' || typeof createdAt === 'number') {
+        createdAt = new Date(createdAt);
+      }
+      if (!(createdAt instanceof Date) || isNaN(createdAt)) return false;
+      return createdAt.getFullYear() === thisYear && createdAt.getMonth() === thisMonth;
+    });
+  }, [products]);
+
+  const avgIncentiveThisMonth = thisMonthProducts.length
+    ? Math.round(thisMonthProducts.reduce((sum, p) => sum + (parseFloat(p.incentive) || 0), 0) / thisMonthProducts.length)
+    : 0;
 
   // Pagination for products list
   const [currentPage, setCurrentPage] = useState(1);
@@ -341,10 +381,11 @@ const ProductsEnhanced = () => {
         company: product.company || '',
         category: product.category || '',
         subcategory: product.subcategory || '',
-        name: product.name || '',
-        price: product.price || '',
-        minPrice: product.minPrice || '',
-        incentive: product.incentive || '',
+        name: product.name ?? '',
+        mrp: (product.mrp !== undefined && product.mrp !== null) ? product.mrp : '',
+        price: product.price ?? '',
+        minPrice: product.minPrice ?? '',
+        incentive: product.incentive ?? '',
       });
     } else {
       setEditingProduct(null);
@@ -353,6 +394,7 @@ const ProductsEnhanced = () => {
         category: '',
         subcategory: '',
         name: '',
+        mrp: '',
         price: '',
         minPrice: '',
         incentive: '',
@@ -366,29 +408,30 @@ const ProductsEnhanced = () => {
     setEditingProduct(null);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const productData = {
-      company: formData.company,
-      category: formData.category,
-      subcategory: formData.subcategory,
-      name: formData.name,
-      price: parseFloat(formData.price) || 0,
-      minPrice: parseFloat(formData.minPrice) || 0,
-      incentive: parseFloat(formData.incentive) || 0,
-    };
-    
-    try {
-      if (editingProduct) {
-        await updateProduct(editingProduct.id, productData);
-      } else {
-        await addProduct(productData);
-      }
-      handleCloseModal();
-    } catch (err) {
-      alert('Error saving product. Please try again.');
-    }
+ const handleSubmit = async (e) => {
+  e.preventDefault();
+  const productData = {
+    company: formData.company,
+    category: formData.category,
+    subcategory: formData.subcategory,
+    name: formData.name,
+    price: parseFloat(formData.price) || 0,
+    minPrice: parseFloat(formData.minPrice) || 0,
+    incentive: parseFloat(formData.incentive) || 0,
+    mrp: parseFloat(formData.mrp) || 0, // ADD THIS LINE
   };
+  
+  try {
+    if (editingProduct) {
+      await updateProduct(editingProduct.id, productData);
+    } else {
+      await addProduct(productData);
+    }
+    handleCloseModal();
+  } catch (err) {
+    alert('Error saving product. Please try again.');
+  }
+};
 
   const handleDelete = (id) => {
     if (window.confirm('Are you sure you want to delete this product?')) {
@@ -417,15 +460,16 @@ const ProductsEnhanced = () => {
           return null;
         };
 
-        const excelProducts = data.map(row => ({
-          company: findValue(row, ['Company', 'company', 'Brand', 'brand', 'Manufacturer', 'manufacturer']) || 'Unknown',
-          category: findValue(row, ['Category', 'category', 'Type', 'type', 'Product Type']) || 'Unknown',
-          subcategory: findValue(row, ['Subcategory', 'subcategory', 'Sub Category', 'sub category', 'Subtype']) || 'Unknown',
-          name: findValue(row, ['Product Name', 'product name', 'Name', 'name', 'Product', 'product']) || 'Unknown Product',
-          price: parseFloat(findValue(row, ['Price', 'price', 'Cost', 'cost', 'Amount'])) || 0,
-          minPrice: parseFloat(findValue(row, ['Min Price', 'min price', 'Minimum Price', 'minimum price', 'Bottom Price', 'bottom price', 'MinPrice', 'minPrice', 'Base Price', 'base price', 'Lowest Price', 'lowest price'])) || 0,
-          incentive: parseFloat(findValue(row, ['Incentive', 'incentive', 'Commission', 'commission', 'Bonus'])) || 0,
-        }));
+       const excelProducts = data.map(row => ({
+  company: findValue(row, ['Company', 'company', 'Brand', 'brand', 'Manufacturer', 'manufacturer']) || 'Unknown',
+  category: findValue(row, ['Category', 'category', 'Type', 'type', 'Product Type']) || 'Unknown',
+  subcategory: findValue(row, ['Subcategory', 'subcategory', 'Sub Category', 'sub category', 'Subtype']) || 'Unknown',
+  name: findValue(row, ['Product Name', 'product name', 'Name', 'name', 'Product', 'product']) || 'Unknown Product',
+  mrp: parseFloat(findValue(row, ['MRP', 'mrp', 'Maximum Retail Price', 'maximum retail price', 'List Price', 'list price'])) || 0, // ADD THIS
+  price: parseFloat(findValue(row, ['Price', 'price', 'Cost', 'cost', 'Amount'])) || 0,
+  minPrice: parseFloat(findValue(row, ['Min Price', 'min price', 'Minimum Price', 'minimum price', 'Bottom Price', 'bottom price', 'MinPrice', 'minPrice', 'Base Price', 'base price', 'Lowest Price', 'lowest price'])) || 0,
+  incentive: parseFloat(findValue(row, ['Incentive', 'incentive', 'Commission', 'commission', 'Bonus'])) || 0,
+}));
         
         const count = importProductsFromExcel(excelProducts);
         alert(`Successfully imported ${count} products from Excel!`);
@@ -434,22 +478,23 @@ const ProductsEnhanced = () => {
     }
   };
 
-  const handleDownloadData = () => {
-    if (!products || products.length === 0) {
-      alert('No products to download.');
-      return;
-    }
+ const handleDownloadData = () => {
+  if (!products || products.length === 0) {
+    alert('No products to download.');
+    return;
+  }
 
-    const headers = ['Company', 'Category', 'Subcategory', 'Product Name', 'Price', 'Bottom Price', 'Incentive'];
-    const rows = products.map(p => [
-      p.company || '',
-      p.category || '',
-      p.subcategory || '',
-      p.name || '',
-      p.price ?? '',
-      p.minPrice ?? '',
-      p.incentive ?? '',
-    ]);
+  const headers = ['Company', 'Category', 'Subcategory', 'Product Name', 'MRP', 'Price', 'Bottom Price', 'Incentive']; // ADDED MRP
+  const rows = products.map(p => [
+    p.company || '',
+    p.category || '',
+    p.subcategory || '',
+    p.name || '',
+    p.mrp ?? '', // ADD THIS
+    p.price ?? '',
+    p.minPrice ?? '',
+    p.incentive ?? '',
+  ]);
 
     const csvContent = [headers, ...rows]
       .map(row => row
@@ -571,6 +616,16 @@ const ProductsEnhanced = () => {
 
       {/* Filter Section */}
       <div className="card">
+        {/* New: This Month Filter Toggle */}
+        <div className="mb-4 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setFilterThisMonth(v => !v)}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors border focus:outline-none focus:ring-2 focus:ring-blue-400/50 ${filterThisMonth ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600'}`}
+          >
+            {filterThisMonth ? 'Showing only products added this month' : 'Show only products added this month'}
+          </button>
+        </div>
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
           Filter Products
         </h3>
@@ -773,6 +828,18 @@ const ProductsEnhanced = () => {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {/* New: Avg Incentive for this month */}
+                <div className="card bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 border border-orange-200 dark:border-orange-700">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-orange-600 dark:text-orange-400 mb-1">Avg Incentive (This Month)</p>
+                      <h3 className="text-3xl font-bold text-orange-700 dark:text-orange-300">
+                        ₹{avgIncentiveThisMonth}
+                      </h3>
+                    </div>
+                    <Award className="w-12 h-12 text-orange-500 opacity-50" />
+                  </div>
+                </div>
         <div className="card bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border border-blue-200 dark:border-blue-700">
           <div className="flex items-center justify-between">
             <div>
@@ -780,18 +847,6 @@ const ProductsEnhanced = () => {
               <h3 className="text-3xl font-bold text-blue-700 dark:text-blue-300">{filteredProducts.length}</h3>
             </div>
             <PackageIcon className="w-12 h-12 text-blue-500 opacity-50" />
-          </div>
-        </div>
-
-        <div className="card bg-gradient-to-br from-primary-50 to-primary-100 dark:from-primary-900/20 dark:to-primary-800/20 border border-primary-200 dark:border-primary-700">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-primary-600 dark:text-primary-400 mb-1">Avg Price Difference</p>
-              <h3 className="text-3xl font-bold text-primary-700 dark:text-primary-300">
-                {avgPriceDifference}%
-              </h3>
-            </div>
-            <TrendingDown className="w-12 h-12 text-primary-500 opacity-50" />
           </div>
         </div>
 
@@ -842,31 +897,41 @@ const ProductsEnhanced = () => {
                   <p className="text-sm text-gray-600 dark:text-gray-400">
                     {product.company} • {product.category} • {product.subcategory}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-500 mt-1 line-clamp-1">
-                    {product.description}
-                  </p>
                 </div>
 
                 {/* Price Info and Action Buttons */}
                 <div className="flex flex-col gap-2 items-end">
                   {/* Price Information */}
                   <div className="text-right space-y-1 mb-2">
+                    {/* MRP removed as per request */}
                     <div className="text-xs">
-                      <span className="text-gray-600 dark:text-gray-400">Price: </span>
+                      <span className="text-gray-600 dark:text-gray-400">Sales Price: </span>
                       <span className="font-bold text-green-600 dark:text-green-400">
-                        ₹{(product.price || 0).toLocaleString()}
+                        ₹{(product.price !== undefined && product.price !== null && product.price !== '' ? Number(product.price).toLocaleString() : '—')}
                       </span>
                     </div>
+
                     <div className="text-xs">
-                      <span className="text-gray-600 dark:text-gray-400">Bottom Price: </span>
+  <span className="text-gray-600 dark:text-gray-400">MRP: </span>
+  <span className="font-semibold text-gray-500 dark:text-gray-400 line-through">
+    ₹{(product.mrp !== undefined && product.mrp !== null && product.mrp !== '' && !isNaN(product.mrp))
+      ? Number(product.mrp).toLocaleString()
+      : '—'}
+  </span>
+</div>
+
+                    <div className="text-xs">
+                      <span className="text-gray-600 dark:text-gray-400">Best Price: </span>
                       <span className="font-semibold text-gray-700 dark:text-gray-300">
-                        ₹{(product.minPrice || 0).toLocaleString()}
+                        ₹{product.minPrice !== undefined && product.minPrice !== null && product.minPrice !== '' && !isNaN(product.minPrice)
+                          ? Number(product.minPrice).toLocaleString()
+                          : ''}
                       </span>
                     </div>
                     <div className="text-xs">
                       <span className="text-gray-600 dark:text-gray-400">Incentive: </span>
                       <span className="font-semibold text-blue-600 dark:text-blue-400">
-                        ₹{(product.incentive || 0).toLocaleString()}
+                        ₹{(product.incentive !== undefined && product.incentive !== null && product.incentive !== '' ? Number(product.incentive).toLocaleString() : '—')}
                       </span>
                     </div>
                   </div>
@@ -1064,10 +1129,24 @@ const ProductsEnhanced = () => {
                         />
                       </div>
 
-                      {/* Price */}
+                      {/* MRP */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Price (₹)
+                          MRP (₹)
+                        </label>
+                        <input
+                          type="number"
+                          value={formData.mrp}
+                          onChange={(e) => setFormData({ ...formData, mrp: e.target.value })}
+                          className="input-field"
+                          placeholder="35000"
+                          required
+                        />
+                      </div>
+                      {/* Sales Price */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Sales Price (₹)
                         </label>
                         <input
                           type="number"
@@ -1078,11 +1157,10 @@ const ProductsEnhanced = () => {
                           required
                         />
                       </div>
-
-                      {/* Min Price */}
+                      {/* Best Price */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Bottom Price (₹)
+                          Best Price (₹)
                         </label>
                         <input
                           type="number"
@@ -1093,11 +1171,10 @@ const ProductsEnhanced = () => {
                           required
                         />
                       </div>
-
                       {/* Incentive */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Incentive (₹)
+                          Incentive (₹) <span className="text-xs text-gray-400">(optional)</span>
                         </label>
                         <input
                           type="number"
@@ -1105,7 +1182,6 @@ const ProductsEnhanced = () => {
                           onChange={(e) => setFormData({ ...formData, incentive: e.target.value })}
                           className="input-field"
                           placeholder="1500"
-                          required
                         />
                       </div>
 

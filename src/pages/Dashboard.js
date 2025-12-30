@@ -125,21 +125,70 @@ const Dashboard = () => {
     );
   }
 
-  // Calculate stats
-  const totalEmployees = employees.length;
-  const totalProducts = products.length;
-  const totalIncentives = products.reduce((sum, p) => sum + (p.incentive || 0), 0);
+  // --- Monthly and advanced stats ---
+  // Helper: get month (YYYY-MM) from date
+  const getMonthFromDate = (date) => {
+    if (!date) return '';
+    let d = date;
+    // Firestore Timestamp (has toDate method)
+    if (d && typeof d.toDate === 'function') {
+      d = d.toDate();
+    }
+    // If it's an object with seconds/nanoseconds (Firestore Timestamp plain object)
+    if (d && typeof d === 'object' && d.seconds && d.nanoseconds) {
+      d = new Date(d.seconds * 1000);
+    }
+    // If it's a string
+    if (typeof d === 'string') {
+      d = new Date(d);
+    }
+    if (!(d instanceof Date) || isNaN(d)) return '';
+    return d.toISOString().slice(0, 7); // YYYY-MM
+  };
 
+  // Products added this month
+  const productsThisMonth = products.filter(p => getMonthFromDate(p.createdAt) === selectedMonth);
+  const totalProductsMonth = productsThisMonth.length;
+  const totalProducts = products.length;
+
+  // Pending follow-ups (assume: has a 'followUpStatus' field, value 'pending')
+  const pendingFollowUps = productsThisMonth.filter(p => p.followUpStatus === 'pending').length;
+
+  // Purchased count (assume: has a 'status' field, value 'purchased')
+  const purchasedCount = productsThisMonth.filter(p => (p.status || '').toLowerCase() === 'purchased').length;
+
+  // Total incentives for this month
+  const totalIncentivesMonth = productsThisMonth.reduce((sum, p) => sum + (p.incentive || 0), 0);
+
+  // Top employee of the month (by number of products added, fallback to '-')
+  const employeeProductMap = {};
+  productsThisMonth.forEach(p => {
+    if (p.employeeId) {
+      employeeProductMap[p.employeeId] = (employeeProductMap[p.employeeId] || 0) + 1;
+    }
+  });
+  let topEmployee = '-';
+  let topEmployeeCount = 0;
+  if (Object.keys(employeeProductMap).length > 0) {
+    const topId = Object.entries(employeeProductMap).sort((a, b) => b[1] - a[1])[0][0];
+    const emp = employees.find(e => e.id === topId);
+    topEmployee = emp ? emp.name : topId;
+    topEmployeeCount = employeeProductMap[topId];
+  }
+
+  // Average rating (all time)
   const ratedValues = products.map(p => Number(p.rating)).filter(v => Number.isFinite(v) && v > 0);
   const averageRating = ratedValues.length
     ? (ratedValues.reduce((sum, value) => sum + value, 0) / ratedValues.length).toFixed(1)
     : '0.0';
 
+  // --- Dashboard stat cards ---
   const stats = [
-    { title: 'Total Employees', value: totalEmployees, icon: Users, color: 'from-blue-500 to-blue-600' },
-    { title: 'Total Products', value: totalProducts, icon: Package, color: 'from-primary to-primary-600' },
-    { title: 'Top Rated (Avg)', value: averageRating, icon: Star, color: 'from-yellow-400 to-yellow-500' },
-    { title: 'Total Incentives', value: `₹${totalIncentives.toLocaleString()}`, icon: DollarSign, color: 'from-purple-500 to-purple-600' },
+    { title: 'Total Employees', value: employees.length, icon: Users, color: 'from-blue-500 to-blue-600' },
+    { title: 'Pending Follow-ups', value: pendingFollowUps, icon: RefreshCw, color: 'from-pink-500 to-pink-600' },
+    { title: 'Purchased This Month', value: purchasedCount, icon: DollarSign, color: 'from-green-500 to-green-600' },
+    { title: 'Total Products', value: totalProducts, icon: Package, color: 'from-gray-500 to-gray-600' },
+    { title: 'Top Employee (Month)', value: topEmployee !== '-' ? `${topEmployee} (${topEmployeeCount})` : '-', icon: Star, color: 'from-yellow-400 to-yellow-500' },
   ];
 
   const currentSlide = allOfferImages[currentImageIndex];
