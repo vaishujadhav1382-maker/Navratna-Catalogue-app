@@ -13,30 +13,6 @@ export const useApp = () => {
   return context;
 };
 
-// Mock data
-const initialEmployees = [
-  {
-    id: 1,
-    name: 'Rajesh Kumar',
-    mobile: '+91 9876543210',
-    loginId: '+91 9876543210',
-    password: 'emp123',
-  },
-  {
-    id: 2,
-    name: 'Priya Sharma',
-    mobile: '+91 9876543211',
-    loginId: '+91 9876543211',
-    password: 'emp456',
-  },
-  {
-    id: 3,
-    name: 'Amit Patel',
-    mobile: '+91 9876543212',
-    loginId: '+91 9876543212',
-    password: 'emp789',
-  },
-];
 
 const initialProducts = [];
 
@@ -371,7 +347,8 @@ export const AppProvider = ({ children }) => {
       // Use rolePath from employee if available, otherwise determine from role
       const path = employee?.rolePath || rolePathMap[employee?.role] || rolePathMap.salesman;
       await deleteDoc(doc(db, ...path, id));
-      setEmployees(employees.filter(emp => emp.id !== id));
+      // Always refresh from Firestore after delete
+      await fetchEmployees();
     } catch (err) {
       console.error('Error deleting employee:', err);
       setEmployeesError('Failed to delete employee');

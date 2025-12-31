@@ -176,15 +176,6 @@ const Employees = () => {
             <User className="w-12 h-12 text-blue-500 opacity-50" />
           </div>
         </div>
-        <div className="card bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border border-green-200 dark:border-green-700">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-green-600 dark:text-green-400 mb-1">Active Today</p>
-              <h3 className="text-3xl font-bold text-green-700 dark:text-green-300">{Math.min(employees.length, 3)}</h3>
-            </div>
-            <User className="w-12 h-12 text-green-500 opacity-50" />
-          </div>
-        </div>
       </div>
 
       {/* Search Bar */}

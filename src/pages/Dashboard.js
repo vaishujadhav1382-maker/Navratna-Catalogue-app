@@ -3,11 +3,31 @@ import { useApp } from '../context/AppContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Users, Package, DollarSign, Star, RefreshCw, Megaphone, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where, collectionGroup } from 'firebase/firestore';
 import { db } from '../firebase';
 
 const Dashboard = () => {
   const { employees, products, employeesLoading, productsLoading, fetchEmployees, fetchProducts } = useApp();
+  const [appointments, setAppointments] = useState([]);
+  const [appointmentsLoading, setAppointmentsLoading] = useState(true);
+    // Fetch appointments for follow-up stats
+    useEffect(() => {
+      let isMounted = true;
+      const fetchAppointments = async () => {
+        setAppointmentsLoading(true);
+        try {
+          const querySnapshot = await getDocs(collectionGroup(db, 'appointments'));
+          const fetchedData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          if (isMounted) setAppointments(fetchedData);
+        } catch (error) {
+          if (isMounted) setAppointments([]);
+        } finally {
+          if (isMounted) setAppointmentsLoading(false);
+        }
+      };
+      fetchAppointments();
+      return () => { isMounted = false; };
+    }, []);
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
   const [offers, setOffers] = useState([]);
   const [offersLoading, setOffersLoading] = useState(true);
@@ -114,7 +134,7 @@ const Dashboard = () => {
     return date.toLocaleString('default', { month: 'long', year: 'numeric' });
   };
 
-  if (isLoading && employees.length === 0 && products.length === 0) {
+  if ((isLoading && employees.length === 0 && products.length === 0) || appointmentsLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
@@ -146,16 +166,34 @@ const Dashboard = () => {
     return d.toISOString().slice(0, 7); // YYYY-MM
   };
 
+
   // Products added this month
   const productsThisMonth = products.filter(p => getMonthFromDate(p.createdAt) === selectedMonth);
   const totalProductsMonth = productsThisMonth.length;
   const totalProducts = products.length;
 
-  // Pending follow-ups (assume: has a 'followUpStatus' field, value 'pending')
-  const pendingFollowUps = productsThisMonth.filter(p => p.followUpStatus === 'pending').length;
-
-  // Purchased count (assume: has a 'status' field, value 'purchased')
-  const purchasedCount = productsThisMonth.filter(p => (p.status || '').toLowerCase() === 'purchased').length;
+  // --- Follow-up stats from appointments ---
+  // Only consider appointments created in the selected month
+  const appointmentsThisMonth = appointments.filter(a => {
+    if (!a.createdDate) return false;
+    // createdDate may be in DD/MM/YYYY, convert to YYYY-MM
+    const [day, month, year] = a.createdDate.split('/');
+    if (!day || !month || !year) return false;
+    const aptMonth = `${year}-${month.padStart(2, '0')}`;
+    return aptMonth === selectedMonth;
+  });
+  // Pending follow-ups: status is 'Pending' and no followUp is 'Complete' or 'Purchased'
+  const pendingFollowUps = appointmentsThisMonth.filter(a => {
+    if ((a.status || '').toLowerCase() !== 'pending') return false;
+    if (!Array.isArray(a.followUps) || a.followUps.length === 0) return true;
+    // If any followUp has status 'Complete' or 'Purchased', not pending
+    return !a.followUps.some(fu => {
+      const s = (fu.status || '').toLowerCase();
+      return s === 'complete' || s === 'purchased';
+    });
+  }).length;
+  // Purchased this month: status is 'Purchased' (case-insensitive)
+  const purchasedCount = appointmentsThisMonth.filter(a => (a.status || '').toLowerCase() === 'purchased').length;
 
   // Total incentives for this month
   const totalIncentivesMonth = productsThisMonth.reduce((sum, p) => sum + (p.incentive || 0), 0);
