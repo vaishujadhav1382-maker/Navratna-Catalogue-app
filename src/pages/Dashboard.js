@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, Package, DollarSign, Star, RefreshCw, Megaphone, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Users, Package, DollarSign, Star, RefreshCw, Megaphone, Calendar, ChevronLeft, ChevronRight, Phone, MapPin, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { collection, getDocs, query, where, collectionGroup } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -29,6 +29,7 @@ const Dashboard = () => {
       return () => { isMounted = false; };
     }, []);
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10)); // YYYY-MM-DD
   const [offers, setOffers] = useState([]);
   const [offersLoading, setOffersLoading] = useState(true);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -134,6 +135,33 @@ const Dashboard = () => {
     return date.toLocaleString('default', { month: 'long', year: 'numeric' });
   };
 
+  // Helper function to convert createdDate (DD/MM/YYYY) to YYYY-MM-DD
+  const convertCreatedDateToYYYYMMDD = (createdDate) => {
+    if (!createdDate) return '';
+    const [day, month, year] = createdDate.split('/');
+    if (!day || !month || !year) return '';
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  };
+
+  // Filter followups for selected date
+  const followupsForSelectedDate = appointments.filter(a => {
+    const aptDate = convertCreatedDateToYYYYMMDD(a.createdDate);
+    return aptDate === selectedDate;
+  });
+
+  // Calculate pending and purchased for selected date
+  const pendingOnSelectedDate = followupsForSelectedDate.filter(a => {
+    const status = (a.status || '').toLowerCase().trim();
+    // Pending: status is exactly 'pending'
+    return status === 'pending';
+  }).length;
+
+  const purchasedOnSelectedDate = followupsForSelectedDate.filter(a => {
+    const status = (a.status || '').toLowerCase().trim();
+    // Purchased: status is exactly 'purchased'
+    return status === 'purchased';
+  }).length;
+
   if ((isLoading && employees.length === 0 && products.length === 0) || appointmentsLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -223,8 +251,8 @@ const Dashboard = () => {
   // --- Dashboard stat cards ---
   const stats = [
     { title: 'Total Employees', value: employees.length, icon: Users, color: 'from-blue-500 to-blue-600' },
-    { title: 'Pending Follow-ups', value: pendingFollowUps, icon: RefreshCw, color: 'from-pink-500 to-pink-600' },
-    { title: 'Purchased This Month', value: purchasedCount, icon: DollarSign, color: 'from-green-500 to-green-600' },
+    { title: 'Pending Follow-ups', value: pendingOnSelectedDate, icon: RefreshCw, color: 'from-pink-500 to-pink-600' },
+    { title: 'Purchased This Date', value: purchasedOnSelectedDate, icon: DollarSign, color: 'from-green-500 to-green-600' },
     { title: 'Total Products', value: totalProducts, icon: Package, color: 'from-gray-500 to-gray-600' },
     { title: 'Top Employee (Month)', value: topEmployee !== '-' ? `${topEmployee} (${topEmployeeCount})` : '-', icon: Star, color: 'from-yellow-400 to-yellow-500' },
   ];
@@ -318,6 +346,166 @@ const Dashboard = () => {
             </div>
           </motion.div>
         ))}
+      </div>
+
+      {/* Date Calendar and Followups Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Calendar */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="lg:col-span-1 bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700"
+        >
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-primary" />
+            Select Date
+          </h2>
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-sm focus:ring-2 focus:ring-primary/50 outline-none text-gray-900 dark:text-white"
+          />
+          <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
+            <p className="text-sm text-gray-600 dark:text-gray-300 font-semibold mb-2">
+              Followups on:
+            </p>
+            <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+              {new Date(selectedDate).toLocaleDateString('en-US', { 
+                weekday: 'short', 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric' 
+              })}
+            </p>
+            <p className="text-sm text-blue-600 dark:text-blue-400 mt-3 pb-3 border-b border-blue-200 dark:border-blue-700">
+              Total: <span className="font-bold">{followupsForSelectedDate.length}</span>
+            </p>
+            
+            <div className="mt-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-600 dark:text-gray-400">Pending Follow-ups</span>
+                <span className="text-lg font-bold text-pink-600 dark:text-pink-400">{pendingOnSelectedDate}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-600 dark:text-gray-400">Purchased This Date</span>
+                <span className="text-lg font-bold text-green-600 dark:text-green-400">{purchasedOnSelectedDate}</span>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Followups List */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="lg:col-span-3 bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700"
+        >
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+            Followup Details
+          </h2>
+          
+          {followupsForSelectedDate.length > 0 ? (
+            <div className="space-y-4 max-h-[600px] overflow-y-auto">
+              {followupsForSelectedDate.map((apt, index) => (
+                <motion.div
+                  key={apt.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  className="border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-start justify-between gap-4 mb-3">
+                    <div className="flex-1">
+                      <h3 className="font-bold text-gray-900 dark:text-white text-base">
+                        {apt.customerName || 'Unknown Customer'}
+                      </h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        ID: {apt.id}
+                      </p>
+                    </div>
+                    <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                      apt.status === 'Purchased' 
+                        ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' 
+                        : apt.status === 'Pending'
+                        ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+                        : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                    }`}>
+                      {apt.status || 'Unknown'}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                    {apt.customerMobile && (
+                      <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                        <Phone className="w-4 h-4 text-primary" />
+                        <span>{apt.customerMobile}</span>
+                      </div>
+                    )}
+                    {apt.location && (
+                      <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                        <MapPin className="w-4 h-4 text-primary" />
+                        <span>{apt.location}</span>
+                      </div>
+                    )}
+                    {apt.appointmentDate && (
+                      <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                        <Clock className="w-4 h-4 text-primary" />
+                        <span>{apt.appointmentDate}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {apt.products && apt.products.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                      <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">Products:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {apt.products.map((product, pIdx) => (
+                          <span 
+                            key={pIdx}
+                            className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded"
+                          >
+                            {product.name || product.productName || `Product ${pIdx + 1}`}
+                            {product.status && ` (${product.status})`}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {apt.followUps && apt.followUps.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                      <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">Follow-up Status:</p>
+                      <div className="space-y-1">
+                        {apt.followUps.map((fu, fuIdx) => (
+                          <div key={fuIdx} className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                            {fu.status === 'Complete' || fu.status === 'Purchased' ? (
+                              <CheckCircle className="w-3.5 h-3.5 text-green-500" />
+                            ) : (
+                              <AlertCircle className="w-3.5 h-3.5 text-yellow-500" />
+                            )}
+                            <span>{fu.date} - {fu.status || 'Pending'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-48">
+              <div className="text-center">
+                <Calendar className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                <p className="text-gray-500 dark:text-gray-400 text-sm">
+                  No followups scheduled for {new Date(selectedDate).toLocaleDateString()}
+                </p>
+              </div>
+            </div>
+          )}
+        </motion.div>
       </div>
 
       {/* HERO OFFERS SLIDER - Main Centerpiece */}
