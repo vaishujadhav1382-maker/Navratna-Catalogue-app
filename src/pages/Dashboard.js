@@ -29,7 +29,15 @@ const Dashboard = () => {
       return () => { isMounted = false; };
     }, []);
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10)); // YYYY-MM-DD
+  
+  // Set default date to yesterday
+  const getYesterdayDate = () => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    return yesterday.toISOString().slice(0, 10);
+  };
+  
+  const [selectedDate, setSelectedDate] = useState(getYesterdayDate()); // YYYY-MM-DD
   const [offers, setOffers] = useState([]);
   const [offersLoading, setOffersLoading] = useState(true);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -396,104 +404,77 @@ const Dashboard = () => {
           </div>
         </motion.div>
 
-        {/* Followups List */}
+        {/* Followups Table */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
-          className="lg:col-span-3 bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700"
+          className="lg:col-span-3 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden"
         >
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
-            Followup Details
-          </h2>
+          <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+              Followup Details
+            </h2>
+          </div>
           
           {followupsForSelectedDate.length > 0 ? (
-            <div className="space-y-4 max-h-[600px] overflow-y-auto">
-              {followupsForSelectedDate.map((apt, index) => (
-                <motion.div
-                  key={apt.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  className="border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-md transition-shadow"
-                >
-                  <div className="flex items-start justify-between gap-4 mb-3">
-                    <div className="flex-1">
-                      <h3 className="font-bold text-gray-900 dark:text-white text-base">
-                        {apt.customerName || 'Unknown Customer'}
-                      </h3>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        ID: {apt.id}
-                      </p>
-                    </div>
-                    <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                      apt.status === 'Purchased' 
-                        ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' 
-                        : apt.status === 'Pending'
-                        ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
-                        : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
-                    }`}>
-                      {apt.status || 'Unknown'}
-                    </div>
-                  </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Number</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">First Visit Date</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Product</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Follow Ups</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {followupsForSelectedDate.map((apt) => {
+                    const firstProduct = apt.products && apt.products.length > 0 
+                      ? (apt.products[0].name || apt.products[0].productName || 'N/A')
+                      : 'N/A';
+                    
+                    const followUpCount = apt.followUps && Array.isArray(apt.followUps) 
+                      ? apt.followUps.length 
+                      : 0;
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                    {apt.customerMobile && (
-                      <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-                        <Phone className="w-4 h-4 text-primary" />
-                        <span>{apt.customerMobile}</span>
-                      </div>
-                    )}
-                    {apt.location && (
-                      <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-                        <MapPin className="w-4 h-4 text-primary" />
-                        <span>{apt.location}</span>
-                      </div>
-                    )}
-                    {apt.appointmentDate && (
-                      <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-                        <Clock className="w-4 h-4 text-primary" />
-                        <span>{apt.appointmentDate}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {apt.products && apt.products.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                      <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">Products:</p>
-                      <div className="flex flex-wrap gap-2">
-                        {apt.products.map((product, pIdx) => (
-                          <span 
-                            key={pIdx}
-                            className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded"
-                          >
-                            {product.name || product.productName || `Product ${pIdx + 1}`}
-                            {product.status && ` (${product.status})`}
+                    return (
+                      <tr key={apt.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                        <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
+                          {apt.customerName || 'Unknown'}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                          {apt.customerMobile || 'N/A'}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                          {apt.createdDate || 'N/A'}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                          {firstProduct}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs font-semibold">
+                            {followUpCount}
                           </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {apt.followUps && apt.followUps.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                      <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">Follow-up Status:</p>
-                      <div className="space-y-1">
-                        {apt.followUps.map((fu, fuIdx) => (
-                          <div key={fuIdx} className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                            {fu.status === 'Complete' || fu.status === 'Purchased' ? (
-                              <CheckCircle className="w-3.5 h-3.5 text-green-500" />
-                            ) : (
-                              <AlertCircle className="w-3.5 h-3.5 text-yellow-500" />
-                            )}
-                            <span>{fu.date} - {fu.status || 'Pending'}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </motion.div>
-              ))}
+                        </td>
+                        <td className="px-6 py-4 text-sm">
+                          <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${
+                            apt.status === 'Purchased' 
+                              ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' 
+                              : apt.status === 'Pending'
+                              ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+                              : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                          }`}>
+                            {apt.status || 'Unknown'}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           ) : (
             <div className="flex items-center justify-center h-48">
