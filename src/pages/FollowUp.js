@@ -24,7 +24,7 @@ const FollowUp = () => {
 
     // Filter States
     const [selectedEmployee, setSelectedEmployee] = useState('all');
-    const [statusFilter, setStatusFilter] = useState('all');
+    const [statusFilter, setStatusFilter] = useState('pending');
     const [dateFilter, setDateFilter] = useState('');
     // Search bar state
     const [searchTerm, setSearchTerm] = useState("");
