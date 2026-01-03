@@ -439,6 +439,26 @@ const ProductsEnhanced = () => {
     }
   };
 
+  // const handleDeleteAllData = async () => {
+  //   const confirmDelete = window.confirm(
+  //     'Are you sure you want to delete ALL products? This action cannot be undone.'
+  //   );
+  //   if (confirmDelete) {
+  //     const finalConfirm = window.confirm(
+  //       'This will permanently delete all products from the database. Click OK to confirm.'
+  //     );
+  //     if (finalConfirm) {
+  //       try {
+  //         await deleteAllProducts();
+  //         alert('All products have been deleted successfully.');
+  //       } catch (error) {
+  //         alert('Failed to delete all products. Please try again.');
+  //         console.error('Delete all error:', error);
+  //       }
+  //     }
+  //   }
+  // };
+
   const handleExcelUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -604,6 +624,15 @@ const ProductsEnhanced = () => {
             <Download className="w-5 h-5" />
             <span>Download Data</span>
           </motion.button>
+          {/* <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={handleDeleteAllData}
+            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-colors flex items-center space-x-2"
+          >
+            <Trash2 className="w-5 h-5" />
+            <span>Delete All Data</span>
+          </motion.button> */}
           <input
             ref={fileInputRef}
             type="file"

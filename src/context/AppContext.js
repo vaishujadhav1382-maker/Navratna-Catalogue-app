@@ -608,6 +608,7 @@ export const AppProvider = ({ children }) => {
         // Store only legacy Firestore fields; UI will normalize on read
         const productData = {
           productName: product.name,
+          mrp: product.mrp,
           bottomPrice: product.minPrice,
           price: product.price,
           company: product.company,
