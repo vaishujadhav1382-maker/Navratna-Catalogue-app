@@ -11,6 +11,7 @@ const ProductsEnhanced = () => {
   const [selectedCompany, setSelectedCompany] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedSubcategory, setSelectedSubcategory] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   // New: Filter for products added this month
   const [filterThisMonth, setFilterThisMonth] = useState(false);
 
@@ -27,6 +28,8 @@ const ProductsEnhanced = () => {
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [detailsProduct, setDetailsProduct] = useState(null);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const fileInputRef = useRef(null);
   const handleRefresh = async () => {
     await fetchProducts();
@@ -57,35 +60,44 @@ const ProductsEnhanced = () => {
   }, [products, companies, customCompanies]);
 
   const availableCategories = useMemo(() => {
-    if (!selectedCompany) return [];
     const fromProducts = Array.from(
       new Set(
         products
-          .filter(p => p.company === selectedCompany)
+          .filter(p => !selectedCompany || p.company === selectedCompany)
           .map(p => p.category)
           .filter(Boolean)
       )
     );
     const base = categories || [];
     const customForCompany = customCategories[selectedCompany] || [];
-    const all = Array.from(new Set([...base, ...fromProducts, ...customForCompany]));
+    const customGeneral = customCategories['General'] || [];
+    const all = Array.from(new Set([...base, ...fromProducts, ...customForCompany, ...customGeneral]));
     return all.sort();
   }, [products, categories, selectedCompany, customCategories]);
 
   const availableSubcategories = useMemo(() => {
-    if (!selectedCompany || !selectedCategory) return [];
     const fromProducts = Array.from(
       new Set(
         products
-          .filter(p => p.company === selectedCompany && p.category === selectedCategory)
+          .filter(p => (!selectedCompany || p.company === selectedCompany) && (!selectedCategory || p.category === selectedCategory))
           .map(p => p.subcategory)
           .filter(Boolean)
       )
     );
-    const key = `${selectedCompany}|${selectedCategory}`;
-    const base = subcategories[selectedCategory] || [];
+    const companyName = selectedCompany || 'General';
+    const categoryName = selectedCategory || '';
+    const key = `${companyName}|${categoryName}`;
+    const base = categoryName ? (subcategories[categoryName] || []) : [];
     const customForPair = customSubcategories[key] || [];
-    const all = Array.from(new Set([...base, ...fromProducts, ...customForPair]));
+    const customGeneral = customSubcategories[`General|${categoryName}`] || [];
+    // Get all custom subcategories for any category if no specific category selected
+    let allCustom = [...customForPair, ...customGeneral];
+    if (!categoryName) {
+      Object.keys(customSubcategories).forEach(k => {
+        allCustom = [...allCustom, ...customSubcategories[k]];
+      });
+    }
+    const all = Array.from(new Set([...base, ...fromProducts, ...allCustom]));
     return all.sort();
   }, [products, subcategories, selectedCompany, selectedCategory, customSubcategories]);
 
@@ -94,6 +106,8 @@ const ProductsEnhanced = () => {
     const now = new Date();
     const thisMonth = now.getMonth();
     const thisYear = now.getFullYear();
+    const lowerSearchQuery = searchQuery.toLowerCase().trim();
+    
     return products.filter(product => {
       if (selectedCompany && product.company !== selectedCompany) return false;
       if (selectedCategory && product.category !== selectedCategory) return false;
@@ -117,9 +131,24 @@ const ProductsEnhanced = () => {
         if (!(createdAt instanceof Date) || isNaN(createdAt)) return false;
         if (createdAt.getFullYear() !== thisYear || createdAt.getMonth() !== thisMonth) return false;
       }
+      
+      // Search filter - search by product name, category, and model number
+      if (lowerSearchQuery) {
+        const productName = (product.name || '').toLowerCase();
+        const productCategory = (product.category || '').toLowerCase();
+        const modelNumber = (product.modelNumber || product.model || '').toLowerCase();
+        const productSubcategory = (product.subcategory || '').toLowerCase();
+        
+        const matchesSearch = productName.includes(lowerSearchQuery) ||
+                             productCategory.includes(lowerSearchQuery) ||
+                             modelNumber.includes(lowerSearchQuery) ||
+                             productSubcategory.includes(lowerSearchQuery);
+        if (!matchesSearch) return false;
+      }
+      
       return true;
     });
-  }, [products, selectedCompany, selectedCategory, selectedSubcategory, filterThisMonth]);
+  }, [products, selectedCompany, selectedCategory, selectedSubcategory, filterThisMonth, searchQuery]);
   // New: Calculate average incentive for this month's filtered products
   const thisMonthProducts = useMemo(() => {
     const now = new Date();
@@ -206,37 +235,17 @@ const ProductsEnhanced = () => {
     setIsCompanyDropdownOpen(false);
   };
 
-  const handleDeleteCompanyFromDropdown = async (company) => {
+  const handleDeleteCompanyFromDropdown = (company) => {
     if (!company) return;
-    const ok = window.confirm(`Delete company "${company}" and all its categories, subcategories and products?`);
+    const ok = window.confirm(`Delete company "${company}" from the list?`);
     if (!ok) return;
-    try {
-      await deleteCompanyHierarchy(company);
-      setCustomCompanies(prev => prev.filter(c => c !== company));
-      setCustomCategories(prev => {
-        const updated = { ...prev };
-        delete updated[company];
-        return updated;
-      });
-      setCustomSubcategories(prev => {
-        const updated = {};
-        Object.keys(prev).forEach(key => {
-          if (!key.startsWith(company + '|')) {
-            updated[key] = prev[key];
-          }
-        });
-        return updated;
-      });
-      if (selectedCompany === company) {
-        setSelectedCompany('');
-        setSelectedCategory('');
-        setSelectedSubcategory('');
-      }
-    } catch (_) {
-      // Error already handled in context
-    } finally {
-      setIsCompanyDropdownOpen(false);
+    setCustomCompanies(prev => prev.filter(c => c !== company));
+    if (selectedCompany === company) {
+      setSelectedCompany('');
+      setSelectedCategory('');
+      setSelectedSubcategory('');
     }
+    setIsCompanyDropdownOpen(false);
   };
 
   const handleSelectCategoryFromDropdown = (category) => {
@@ -244,21 +253,33 @@ const ProductsEnhanced = () => {
     setIsCategoryDropdownOpen(false);
   };
 
-  const handleDeleteCategoryFromDropdown = async (category) => {
-    if (!selectedCompany || !category) return;
-    const ok = window.confirm(`Delete category "${category}" for company "${selectedCompany}" and all its subcategories/products?`);
+  const handleDeleteCategoryFromDropdown = (category) => {
+    if (!category) return;
+    const ok = window.confirm(`Delete category "${category}" from the list?`);
     if (!ok) return;
-    try {
-      await deleteCategoryHierarchy(selectedCompany, category);
-      if (selectedCategory === category) {
-        setSelectedCategory('');
-        setSelectedSubcategory('');
-      }
-    } catch (_) {
-      // Error already handled in context
-    } finally {
-      setIsCategoryDropdownOpen(false);
+    setCustomCategories(prev => {
+      const updated = { ...prev };
+      Object.keys(updated).forEach(key => {
+        updated[key] = updated[key].filter(c => c !== category);
+        if (updated[key].length === 0) delete updated[key];
+      });
+      return updated;
+    });
+    setCustomSubcategories(prev => {
+      const updated = {};
+      Object.keys(prev).forEach(key => {
+        const [company, cat] = key.split('|');
+        if (cat !== category) {
+          updated[key] = prev[key];
+        }
+      });
+      return updated;
+    });
+    if (selectedCategory === category) {
+      setSelectedCategory('');
+      setSelectedSubcategory('');
     }
+    setIsCategoryDropdownOpen(false);
   };
 
   const handleSelectSubcategoryFromDropdown = (subcategory) => {
@@ -266,20 +287,22 @@ const ProductsEnhanced = () => {
     setIsSubcategoryDropdownOpen(false);
   };
 
-  const handleDeleteSubcategoryFromDropdown = async (subcategory) => {
-    if (!selectedCompany || !selectedCategory || !subcategory) return;
-    const ok = window.confirm(`Delete subcategory "${subcategory}" for ${selectedCompany} / ${selectedCategory} and all its products?`);
+  const handleDeleteSubcategoryFromDropdown = (subcategory) => {
+    if (!subcategory) return;
+    const ok = window.confirm(`Delete subcategory "${subcategory}" from the list?`);
     if (!ok) return;
-    try {
-      await deleteSubcategoryHierarchy(selectedCompany, selectedCategory, subcategory);
-      if (selectedSubcategory === subcategory) {
-        setSelectedSubcategory('');
-      }
-    } catch (_) {
-      // Error already handled in context
-    } finally {
-      setIsSubcategoryDropdownOpen(false);
+    setCustomSubcategories(prev => {
+      const updated = {};
+      Object.keys(prev).forEach(key => {
+        updated[key] = prev[key].filter(s => s !== subcategory);
+        if (updated[key].length === 0) delete updated[key];
+      });
+      return updated;
+    });
+    if (selectedSubcategory === subcategory) {
+      setSelectedSubcategory('');
     }
+    setIsSubcategoryDropdownOpen(false);
   };
 
   // Plus-button handlers for adding new options
@@ -293,30 +316,25 @@ const ProductsEnhanced = () => {
   };
 
   const handleAddCategory = () => {
-    if (!selectedCompany) {
-      alert('Please select a company first.');
-      return;
-    }
-    const name = window.prompt(`Enter new category name for ${selectedCompany}`);
+    const name = window.prompt('Enter new category name');
     if (!name) return;
+    const companyKey = selectedCompany || 'General';
     setCustomCategories(prev => ({
       ...prev,
-      [selectedCompany]: prev[selectedCompany]?.includes(name)
-        ? prev[selectedCompany]
-        : [...(prev[selectedCompany] || []), name],
+      [companyKey]: prev[companyKey]?.includes(name)
+        ? prev[companyKey]
+        : [...(prev[companyKey] || []), name],
     }));
     setSelectedCategory(name);
     setSelectedSubcategory('');
   };
 
   const handleAddSubcategory = () => {
-    if (!selectedCompany || !selectedCategory) {
-      alert('Please select company and category first.');
-      return;
-    }
-    const name = window.prompt(`Enter new subcategory for ${selectedCompany} / ${selectedCategory}`);
+    const name = window.prompt('Enter new subcategory name');
     if (!name) return;
-    const key = `${selectedCompany}|${selectedCategory}`;
+    const companyKey = selectedCompany || 'General';
+    const categoryKey = selectedCategory || 'General';
+    const key = `${companyKey}|${categoryKey}`;
     setCustomSubcategories(prev => ({
       ...prev,
       [key]: prev[key]?.includes(name) ? prev[key] : [...(prev[key] || []), name],
@@ -336,17 +354,14 @@ const ProductsEnhanced = () => {
   };
 
   const handleFormAddCategory = () => {
-    if (!formData.company) {
-      alert('Please select a company first.');
-      return;
-    }
-    const name = window.prompt(`Enter new category name for ${formData.company}`);
+    const name = window.prompt(`Enter category name:`);
     if (!name) return;
+    const companyName = formData.company || 'General';
     setCustomCategories(prev => ({
       ...prev,
-      [formData.company]: prev[formData.company]?.includes(name)
-        ? prev[formData.company]
-        : [...(prev[formData.company] || []), name],
+      [companyName]: prev[companyName]?.includes(name)
+        ? prev[companyName]
+        : [...(prev[companyName] || []), name],
     }));
     setFormData(prev => ({
       ...prev,
@@ -356,13 +371,11 @@ const ProductsEnhanced = () => {
   };
 
   const handleFormAddSubcategory = () => {
-    if (!formData.company || !formData.category) {
-      alert('Please select company and category first.');
-      return;
-    }
-    const name = window.prompt(`Enter new subcategory for ${formData.company} / ${formData.category}`);
+    const name = window.prompt(`Enter subcategory name:`);
     if (!name) return;
-    const key = `${formData.company}|${formData.category}`;
+    const companyName = formData.company || 'General';
+    const categoryName = formData.category || 'General';
+    const key = `${companyName}|${categoryName}`;
     setCustomSubcategories(prev => ({
       ...prev,
       [key]: prev[key]?.includes(name) ? prev[key] : [...(prev[key] || []), name],
@@ -410,6 +423,17 @@ const ProductsEnhanced = () => {
 
  const handleSubmit = async (e) => {
   e.preventDefault();
+  
+  // Cascading validation
+  if (formData.company && !formData.category) {
+    alert('Please select Category for the selected Company');
+    return;
+  }
+  if (formData.category && !formData.subcategory) {
+    alert('Please select Subcategory for the selected Category');
+    return;
+  }
+  
   const productData = {
     company: formData.company,
     category: formData.category,
@@ -542,19 +566,34 @@ const ProductsEnhanced = () => {
 
   // Get available categories/subcategories for the form (respect custom additions)
   const formAvailableCategories = useMemo(() => {
-    if (!formData.company) return categories || [];
     const base = categories || [];
     const customForCompany = customCategories[formData.company] || [];
-    return Array.from(new Set([...base, ...customForCompany]));
-  }, [categories, customCategories, formData.company]);
+    const customGeneral = customCategories['General'] || [];
+    let all = Array.from(new Set([...base, ...customForCompany, ...customGeneral]));
+    
+    // Always include the editing product's category if it exists
+    if (editingProduct && editingProduct.category && !all.includes(editingProduct.category)) {
+      all = [...all, editingProduct.category];
+    }
+    
+    return all;
+  }, [categories, customCategories, formData.company, editingProduct]);
 
   const formAvailableSubcategories = useMemo(() => {
-    if (!formData.company || !formData.category) return [];
-    const base = subcategories[formData.category] || [];
-    const key = `${formData.company}|${formData.category}`;
+    const base = formData.category ? (subcategories[formData.category] || []) : [];
+    const companyName = formData.company || 'General';
+    const key = `${companyName}|${formData.category}`;
     const customForPair = customSubcategories[key] || [];
-    return Array.from(new Set([...base, ...customForPair]));
-  }, [formData.company, formData.category, subcategories, customSubcategories]);
+    const customGeneral = customSubcategories[`General|${formData.category}`] || [];
+    let all = Array.from(new Set([...base, ...customForPair, ...customGeneral]));
+    
+    // Always include the editing product's subcategory if it exists
+    if (editingProduct && editingProduct.subcategory && !all.includes(editingProduct.subcategory)) {
+      all = [...all, editingProduct.subcategory];
+    }
+    
+    return all;
+  }, [formData.company, formData.category, subcategories, customSubcategories, editingProduct]);
 
   if (productsLoading && products.length === 0) {
     return (
@@ -658,6 +697,35 @@ const ProductsEnhanced = () => {
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
           Filter Products
         </h3>
+        
+        {/* Search Bar */}
+        <div className="mb-6">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search by product name, category, or model number..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-4 py-3 pl-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                title="Clear search"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
+          </div>
+          {searchQuery && (
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              Found {filteredProducts.length} product{filteredProducts.length !== 1 ? 's' : ''}
+            </p>
+          )}
+        </div>
+        
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Company Filter - custom dropdown with hover delete */}
           <div>
@@ -736,14 +804,13 @@ const ProductsEnhanced = () => {
             <div className="relative">
               <button
                 type="button"
-                onClick={() => selectedCompany && setIsCategoryDropdownOpen(prev => !prev)}
-                className="input-field w-full flex items-center justify-between disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={!selectedCompany}
+                onClick={() => setIsCategoryDropdownOpen(prev => !prev)}
+                className="input-field w-full flex items-center justify-between"
               >
                 <span>{selectedCategory || 'Select Category'}</span>
                 <span className="ml-2 text-gray-400">▾</span>
               </button>
-              {isCategoryDropdownOpen && selectedCompany && (
+              {isCategoryDropdownOpen && (
                 <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-auto">
                   {availableCategories.length === 0 && (
                     <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">No categories</div>
@@ -787,9 +854,8 @@ const ProductsEnhanced = () => {
               <button
                 type="button"
                 onClick={handleAddSubcategory}
-                className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary text-white text-xs hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Add Subcategory for selected company & category"
-                disabled={!selectedCompany || !selectedCategory}
+                className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary text-white text-xs hover:bg-primary-600"
+                title="Add Subcategory"
               >
                 <Plus className="w-3 h-3" />
               </button>
@@ -797,14 +863,13 @@ const ProductsEnhanced = () => {
             <div className="relative">
               <button
                 type="button"
-                onClick={() => selectedCategory && setIsSubcategoryDropdownOpen(prev => !prev)}
-                className="input-field w-full flex items-center justify-between disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={!selectedCategory}
+                onClick={() => setIsSubcategoryDropdownOpen(prev => !prev)}
+                className="input-field w-full flex items-center justify-between"
               >
                 <span>{selectedSubcategory || 'Select Subcategory'}</span>
                 <span className="ml-2 text-gray-400">▾</span>
               </button>
-              {isSubcategoryDropdownOpen && selectedCategory && (
+              {isSubcategoryDropdownOpen && (
                 <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-auto">
                   {availableSubcategories.length === 0 && (
                     <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">No subcategories</div>
@@ -847,6 +912,7 @@ const ProductsEnhanced = () => {
               setSelectedCompany('');
               setSelectedCategory('');
               setSelectedSubcategory('');
+              setSearchQuery('');
             }}
             className="mt-4 text-sm text-primary hover:text-primary-600 font-medium"
           >
@@ -911,7 +977,11 @@ const ProductsEnhanced = () => {
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.05 }}
-                className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+                onClick={() => {
+                  setDetailsProduct(product);
+                  setIsDetailsModalOpen(true);
+                }}
               >
                 {/* Sr. No */}
                 <div className="w-10 h-10 flex items-center justify-center bg-primary-100 dark:bg-primary-900/40 text-primary dark:text-primary-300 font-semibold rounded-full flex-shrink-0">
@@ -970,7 +1040,10 @@ const ProductsEnhanced = () => {
                     <motion.button
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      onClick={() => handleOpenModal(product)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenModal(product);
+                      }}
                       className="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
                       title="Edit Product"
                     >
@@ -979,7 +1052,10 @@ const ProductsEnhanced = () => {
                     <motion.button
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      onClick={() => handleDelete(product.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(product.id);
+                      }}
                       className="p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
                       title="Delete Product"
                     >
@@ -1076,7 +1152,6 @@ const ProductsEnhanced = () => {
                           value={formData.company}
                           onChange={(e) => setFormData({ ...formData, company: e.target.value, category: '', subcategory: '' })}
                           className="input-field"
-                          required
                         >
                           <option value="">Select Company</option>
                           {Array.from(new Set([...(companies || []), ...customCompanies])).map(company => (
@@ -1094,9 +1169,8 @@ const ProductsEnhanced = () => {
                           <button
                             type="button"
                             onClick={handleFormAddCategory}
-                            className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary text-white text-xs hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Add Category for selected company"
-                            disabled={!formData.company}
+                            className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary text-white text-xs hover:bg-primary-600"
+                            title="Add Category"
                           >
                             <Plus className="w-3 h-3" />
                           </button>
@@ -1105,7 +1179,6 @@ const ProductsEnhanced = () => {
                           value={formData.category}
                           onChange={(e) => setFormData({ ...formData, category: e.target.value, subcategory: '' })}
                           className="input-field"
-                          disabled={!formData.company}
                         >
                           <option value="">Select Category</option>
                           {formAvailableCategories.map(cat => (
@@ -1123,9 +1196,8 @@ const ProductsEnhanced = () => {
                           <button
                             type="button"
                             onClick={handleFormAddSubcategory}
-                            className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary text-white text-xs hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Add Subcategory for selected company & category"
-                            disabled={!formData.company || !formData.category}
+                            className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary text-white text-xs hover:bg-primary-600"
+                            title="Add Subcategory"
                           >
                             <Plus className="w-3 h-3" />
                           </button>
@@ -1134,7 +1206,6 @@ const ProductsEnhanced = () => {
                           value={formData.subcategory}
                           onChange={(e) => setFormData({ ...formData, subcategory: e.target.value })}
                           className="input-field"
-                          disabled={!formData.category}
                         >
                           <option value="">Select Subcategory</option>
                           {formAvailableSubcategories.map(sub => (
@@ -1154,7 +1225,6 @@ const ProductsEnhanced = () => {
                           onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                           className="input-field"
                           placeholder="Enter product name"
-                          required
                         />
                       </div>
 
@@ -1169,7 +1239,6 @@ const ProductsEnhanced = () => {
                           onChange={(e) => setFormData({ ...formData, mrp: e.target.value })}
                           className="input-field"
                           placeholder="35000"
-                          required
                         />
                       </div>
                       {/* Sales Price */}
@@ -1183,7 +1252,6 @@ const ProductsEnhanced = () => {
                           onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                           className="input-field"
                           placeholder="30000"
-                          required
                         />
                       </div>
                       {/* Best Price */}
@@ -1197,7 +1265,6 @@ const ProductsEnhanced = () => {
                           onChange={(e) => setFormData({ ...formData, minPrice: e.target.value })}
                           className="input-field"
                           placeholder="24000"
-                          required
                         />
                       </div>
                       {/* Incentive */}
@@ -1240,6 +1307,166 @@ const ProductsEnhanced = () => {
                     </motion.button>
                   </div>
                 </form>
+              </motion.div>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Product Details Modal */}
+      <AnimatePresence>
+        {isDetailsModalOpen && detailsProduct && (
+          <div className="fixed inset-0 z-50 overflow-y-auto">
+            <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 transition-opacity bg-black bg-opacity-50 z-40"
+                onClick={() => setIsDetailsModalOpen(false)}
+              />
+
+              <span className="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="relative z-50 inline-block align-bottom bg-white dark:bg-gray-800 rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full"
+              >
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                      Product Details
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setIsDetailsModalOpen(false)}
+                      className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
+                    >
+                      <X className="w-6 h-6" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Basic Info */}
+                    <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-xl">
+                      <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-3">Product Information</h4>
+                      <div className="space-y-3">
+                        <div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Product ID</p>
+                          <p className="font-mono text-sm text-gray-900 dark:text-gray-100 break-all">{detailsProduct.id}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Product Name</p>
+                          <p className="font-semibold text-gray-900 dark:text-white">{detailsProduct.name}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Firebase Path</p>
+                          <p className="font-mono text-xs text-gray-600 dark:text-gray-300 break-all">{detailsProduct.path}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Category Info */}
+                    <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-xl">
+                      <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-3">Category Information</h4>
+                      <div className="space-y-3">
+                        <div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Company</p>
+                          <p className="font-semibold text-gray-900 dark:text-white">{detailsProduct.company || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Category</p>
+                          <p className="font-semibold text-gray-900 dark:text-white">{detailsProduct.category || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Subcategory</p>
+                          <p className="font-semibold text-gray-900 dark:text-white">{detailsProduct.subcategory || 'N/A'}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Pricing Info */}
+                    <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-xl border border-green-200 dark:border-green-800">
+                      <h4 className="text-sm font-semibold text-green-700 dark:text-green-400 mb-3">Pricing Information</h4>
+                      <div className="space-y-3">
+                        <div>
+                          <p className="text-xs text-green-600 dark:text-green-400">MRP</p>
+                          <p className="font-semibold text-lg text-green-700 dark:text-green-300">
+                            ₹{(detailsProduct.mrp !== undefined && detailsProduct.mrp !== null && !isNaN(detailsProduct.mrp))
+                              ? Number(detailsProduct.mrp).toLocaleString()
+                              : '0'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-green-600 dark:text-green-400">Sales Price</p>
+                          <p className="font-semibold text-lg text-green-700 dark:text-green-300">
+                            ₹{(detailsProduct.price !== undefined && detailsProduct.price !== null && !isNaN(detailsProduct.price))
+                              ? Number(detailsProduct.price).toLocaleString()
+                              : '0'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-green-600 dark:text-green-400">Best Price</p>
+                          <p className="font-semibold text-lg text-green-700 dark:text-green-300">
+                            ₹{(detailsProduct.minPrice !== undefined && detailsProduct.minPrice !== null && !isNaN(detailsProduct.minPrice))
+                              ? Number(detailsProduct.minPrice).toLocaleString()
+                              : '0'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Additional Info */}
+                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-200 dark:border-blue-800">
+                      <h4 className="text-sm font-semibold text-blue-700 dark:text-blue-400 mb-3">Additional Information</h4>
+                      <div className="space-y-3">
+                        <div>
+                          <p className="text-xs text-blue-600 dark:text-blue-400">Incentive</p>
+                          <p className="font-semibold text-lg text-blue-700 dark:text-blue-300">
+                            ₹{(detailsProduct.incentive !== undefined && detailsProduct.incentive !== null && !isNaN(detailsProduct.incentive))
+                              ? Number(detailsProduct.incentive).toLocaleString()
+                              : '0'}
+                          </p>
+                        </div>
+                        {detailsProduct.discount !== undefined && (
+                          <div>
+                            <p className="text-xs text-blue-600 dark:text-blue-400">Discount %</p>
+                            <p className="font-semibold text-lg text-blue-700 dark:text-blue-300">
+                              {detailsProduct.discount.toFixed(2)}%
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 dark:bg-gray-700 px-6 py-4 flex justify-end gap-3">
+                  <motion.button
+                    type="button"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setIsDetailsModalOpen(false)}
+                    className="btn-secondary"
+                  >
+                    Close
+                  </motion.button>
+                  <motion.button
+                    type="button"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => {
+                      handleOpenModal(detailsProduct);
+                      setIsDetailsModalOpen(false);
+                    }}
+                    className="btn-primary flex items-center space-x-2"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                    <span>Edit Product</span>
+                  </motion.button>
+                </div>
               </motion.div>
             </div>
           </div>
