@@ -487,7 +487,7 @@ const ProductsEnhanced = () => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (evt) => {
+      reader.onload = async (evt) => {
         const bstr = evt.target.result;
         const wb = XLSX.read(bstr, { type: 'binary' });
         const wsname = wb.SheetNames[0];
@@ -515,8 +515,12 @@ const ProductsEnhanced = () => {
   incentive: parseFloat(findValue(row, ['Incentive', 'incentive', 'Commission', 'commission', 'Bonus'])) || 0,
 }));
         
-        const count = importProductsFromExcel(excelProducts);
-        alert(`Successfully imported ${count} products from Excel!`);
+        try {
+          const count = await importProductsFromExcel(excelProducts);
+          alert(`Successfully imported ${count} products from Excel!`);
+        } catch (error) {
+          alert(`Error importing products: ${error.message}`);
+        }
       };
       reader.readAsBinaryString(file);
     }

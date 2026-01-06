@@ -601,33 +601,41 @@ export const AppProvider = ({ children }) => {
       let count = 0;
 
       for (const product of excelProducts) {
-        const company = (product.company || 'Unknown').trim();
-        const category = (product.category || 'Unknown').trim();
-        const subcategory = (product.subcategory || 'Unknown').trim();
+        // Validate and trim hierarchy fields, ensure no empty strings
+        const company = (product.company || 'Unknown').trim() || 'Unknown';
+        const category = (product.category || 'Unknown').trim() || 'Unknown';
+        const subcategory = (product.subcategory || 'Unknown').trim() || 'Unknown';
+
+        // Validate product name
+        const productName = (product.name || 'Unknown Product').trim() || 'Unknown Product';
 
         // Store only legacy Firestore fields; UI will normalize on read
         const productData = {
-          productName: product.name,
-          mrp: product.mrp,
-          bottomPrice: product.minPrice,
-          price: product.price,
-          company: product.company,
-          category: product.category,
-          subcategory: product.subcategory,
-          incentive: product.incentive,
+          productName,
+          mrp: parseFloat(product.mrp) || 0,
+          bottomPrice: parseFloat(product.minPrice) || 0,
+          price: parseFloat(product.price) || 0,
+          company,
+          category,
+          subcategory,
+          incentive: parseFloat(product.incentive) || 0,
         };
 
+        // Use company as document ID to ensure consistent reference
         const companyRef = doc(collection(db, 'admin-data', 'root', 'products'), company);
         batch.set(companyRef, { name: company }, { merge: true });
 
+        // Use category as document ID
         const categoryRef = doc(collection(companyRef, 'categories'), category);
         batch.set(categoryRef, { name: category }, { merge: true });
 
+        // Use subcategory as document ID
         const subcatRef = doc(collection(categoryRef, 'subcategories'), subcategory);
         batch.set(subcatRef, { name: subcategory }, { merge: true });
 
+        // Generate a unique ID for the product
         const prodRef = doc(collection(subcatRef, 'products'));
-        batch.set(prodRef, productData);
+        batch.set(prodRef, { ...productData, createdAt: new Date() });
         count++;
       }
 
