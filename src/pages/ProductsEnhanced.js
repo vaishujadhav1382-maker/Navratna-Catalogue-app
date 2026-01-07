@@ -50,6 +50,7 @@ const ProductsEnhanced = () => {
   const [editingProduct, setEditingProduct] = useState(null);
   const [detailsProduct, setDetailsProduct] = useState(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [selectedProducts, setSelectedProducts] = useState(new Set());
   const fileInputRef = useRef(null);
   const handleRefresh = async () => {
     await fetchProducts();
@@ -516,6 +517,19 @@ const ProductsEnhanced = () => {
     }
   };
 
+  const handleBulkDelete = async () => {
+    try {
+      for (const productId of selectedProducts) {
+        await deleteProduct(productId);
+      }
+      setSelectedProducts(new Set());
+      await fetchProducts();
+    } catch (error) {
+      console.error('Error deleting products:', error);
+      alert('Failed to delete some products. Please try again.');
+    }
+  };
+
  const handleDownloadData = () => {
   if (!products || products.length === 0) {
     alert('No products to download.');
@@ -891,6 +905,21 @@ const ProductsEnhanced = () => {
               <table className="w-full border-collapse">
                 <thead>
                   <tr className="bg-gray-100 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-600">
+                    <th className="px-4 py-3 text-center text-sm font-semibold text-gray-900 dark:text-white" style={{ width: '40px' }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedProducts.size === paginatedProducts.length && paginatedProducts.length > 0}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedProducts(new Set(paginatedProducts.map(p => p.id)));
+                          } else {
+                            setSelectedProducts(new Set());
+                          }
+                        }}
+                        className="w-4 h-4 cursor-pointer"
+                        title="Select all products on this page"
+                      />
+                    </th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Sr.</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Product Name</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Category</th>
@@ -909,13 +938,29 @@ const ProductsEnhanced = () => {
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       transition={{ delay: index * 0.05 }}
-                      className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors cursor-pointer"
-                      onClick={() => {
+                      className={`border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors ${selectedProducts.has(product.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                    >
+                      <td className="px-4 py-3 text-center" style={{ width: '40px' }} onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selectedProducts.has(product.id)}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            const newSelected = new Set(selectedProducts);
+                            if (e.target.checked) {
+                              newSelected.add(product.id);
+                            } else {
+                              newSelected.delete(product.id);
+                            }
+                            setSelectedProducts(newSelected);
+                          }}
+                          className="w-4 h-4 cursor-pointer"
+                        />
+                      </td>
+                      <td className="px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white cursor-pointer" onClick={() => {
                         setDetailsProduct(product);
                         setIsDetailsModalOpen(true);
-                      }}
-                    >
-                      <td className="px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white">
+                      }}>
                         {((currentPage - 1) * pageSize) + index + 1}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-900 dark:text-white font-medium max-w-xs truncate">
@@ -972,6 +1017,36 @@ const ProductsEnhanced = () => {
                 </tbody>
               </table>
             </div>
+
+            {/* Bulk Delete Section */}
+            {selectedProducts.size > 0 && (
+              <div className="flex items-center gap-3 pt-4 mt-4 pb-4 px-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <span className="text-sm font-medium text-blue-900 dark:text-blue-200">
+                  {selectedProducts.size} product{selectedProducts.size !== 1 ? 's' : ''} selected
+                </span>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => {
+                    if (window.confirm(`Delete ${selectedProducts.size} product${selectedProducts.size !== 1 ? 's' : ''}? This action cannot be undone.`)) {
+                      handleBulkDelete();
+                    }
+                  }}
+                  className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete Selected
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setSelectedProducts(new Set())}
+                  className="px-4 py-2 bg-gray-400 hover:bg-gray-500 text-white rounded-lg font-medium transition-colors"
+                >
+                  Clear Selection
+                </motion.button>
+              </div>
+            )}
 
             {/* Pagination Controls */}
             <div className="flex items-center justify-between pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
