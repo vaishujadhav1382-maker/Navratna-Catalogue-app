@@ -86,6 +86,7 @@ export const AppProvider = ({ children }) => {
       setEmployeesError(null);
       const employeesData = [];
       const emailDocs = [];
+      const employeeIds = new Set(); // Track IDs to prevent duplicates
 
       // Role-based paths
       const rolePaths = [
@@ -102,30 +103,22 @@ export const AppProvider = ({ children }) => {
             const data = snap.data() || {};
             const { email, ...rest } = data;
             if (email !== undefined) emailDocs.push(snap.ref);
-            employeesData.push({
-              id: snap.id,
-              ...rest,
-              role: data.role || role, // Use role from data or default to path role
-              rolePath: path // Store path for updates/deletes
-            });
+            
+            // Only add if not already seen
+            if (!employeeIds.has(snap.id)) {
+              employeeIds.add(snap.id);
+              employeesData.push({
+                id: snap.id,
+                ...rest,
+                role: data.role || role, // Use role from data or default to path role
+                rolePath: path // Store path for updates/deletes
+              });
+            }
           });
         } catch (err) {
           console.warn(`Error fetching ${role}s:`, err);
         }
       }
-
-      // Fallback legacy path for backward compatibility
-      try {
-        const qsLegacy = await getDocs(collection(db, 'admin-data', 'root', 'employees'));
-        qsLegacy.forEach((snap) => {
-          const data = snap.data() || {};
-          const { email, ...rest } = data;
-          if (email !== undefined) emailDocs.push(snap.ref);
-          if (!employeesData.find(e => e.id === snap.id)) {
-            employeesData.push({ id: snap.id, ...rest });
-          }
-        });
-      } catch (_) { /* ignore */ }
 
       // Remove 'email' field from Firestore docs (one-time cleanup)
       if (emailDocs.length > 0) {
@@ -364,6 +357,11 @@ export const AppProvider = ({ children }) => {
       setProductsLoading(true);
       setProductsError(null);
 
+      // Validate required fields
+      if (!product.category || !product.subcategory) {
+        throw new Error('Category and Subcategory are required');
+      }
+
       // Store both normalized and legacy fields for compatibility
       const productData = {
         name: product.name,
@@ -371,7 +369,6 @@ export const AppProvider = ({ children }) => {
         productName: product.name, // legacy
         bottomPrice: product.minPrice, // legacy
         price: product.price,
-        company: product.company,
         category: product.category,
         subcategory: product.subcategory,
         incentive: product.incentive,
@@ -379,15 +376,16 @@ export const AppProvider = ({ children }) => {
         createdAt: new Date(),
       };
 
-      const company = (product.company || 'Unknown').trim();
+      // Only add company if it's provided
+      if (product.company) {
+        productData.company = product.company;
+      }
+
       const category = (product.category || 'Unknown').trim();
       const subcategory = (product.subcategory || 'Unknown').trim();
 
-      // Ensure parent documents exist
-      const companyRef = doc(collection(db, 'admin-data', 'root', 'products'), company);
-      await setDoc(companyRef, { name: company }, { merge: true });
-
-      const categoryRef = doc(collection(companyRef, 'categories'), category);
+      // Correct path: admin-data/root/categories/{category}/subcategories/{subcategory}/products
+      const categoryRef = doc(collection(db, 'admin-data', 'root', 'categories'), category);
       await setDoc(categoryRef, { name: category }, { merge: true });
 
       const subcatRef = doc(collection(categoryRef, 'subcategories'), subcategory);

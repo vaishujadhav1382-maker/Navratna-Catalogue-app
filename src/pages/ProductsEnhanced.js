@@ -8,7 +8,6 @@ const ProductsEnhanced = () => {
   const { products, productsLoading, fetchProducts, addProduct, updateProduct, deleteProduct, deleteAllProducts, importProductsFromExcel, companies, categories, subcategories, deleteCompanyHierarchy, deleteCategoryHierarchy, deleteSubcategoryHierarchy } = useApp();
   
   // Filter states
-  const [selectedCompany, setSelectedCompany] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedSubcategory, setSelectedSubcategory] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -16,14 +15,35 @@ const ProductsEnhanced = () => {
   const [filterThisMonth, setFilterThisMonth] = useState(false);
 
   // Custom dropdown open states
-  const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
   const [isSubcategoryDropdownOpen, setIsSubcategoryDropdownOpen] = useState(false);
 
   // Extra options added from filter plus buttons (client-side only)
-  const [customCompanies, setCustomCompanies] = useState([]); // string[]
-  const [customCategories, setCustomCategories] = useState({}); // { [company]: string[] }
-  const [customSubcategories, setCustomSubcategories] = useState({}); // { `${company}|${category}`: string[] }
+  const [customCompanies, setCustomCompanies] = useState([]); // Deprecated - keeping for backwards compatibility
+  // Initialize deleted items from localStorage
+  const [deletedCompanies, setDeletedCompanies] = useState(() => {
+    const saved = localStorage.getItem('deletedCompanies');
+    return saved ? JSON.parse(saved) : [];
+  }); // Deprecated - keeping for backwards compatibility
+  const [customCategories, setCustomCategories] = useState({}); // { category: string[] }
+  const [deletedCategories, setDeletedCategories] = useState(() => {
+    const saved = localStorage.getItem('deletedCategories');
+    return saved ? JSON.parse(saved) : [];
+  }); // Track deleted default categories
+  const [customSubcategories, setCustomSubcategories] = useState({}); // { `${category}`: string[] }
+  const [deletedSubcategories, setDeletedSubcategories] = useState(() => {
+    const saved = localStorage.getItem('deletedSubcategories');
+    return saved ? JSON.parse(saved) : [];
+  }); // Track deleted default subcategories
+  
+  // Persist deleted items to localStorage
+  useEffect(() => {
+    localStorage.setItem('deletedCategories', JSON.stringify(deletedCategories));
+  }, [deletedCategories]);
+  
+  useEffect(() => {
+    localStorage.setItem('deletedSubcategories', JSON.stringify(deletedSubcategories));
+  }, [deletedSubcategories]);
   
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -33,16 +53,14 @@ const ProductsEnhanced = () => {
   const fileInputRef = useRef(null);
   const handleRefresh = async () => {
     await fetchProducts();
-    setSelectedCompany('');
     setSelectedCategory('');
     setSelectedSubcategory('');
-    setCustomCompanies([]);
     setCustomCategories({});
     setCustomSubcategories({});
+    // Note: We do NOT clear deleted items - they persist in localStorage
   };
   
   const [formData, setFormData] = useState({
-    company: '',
     category: '',
     subcategory: '',
     name: '',
@@ -53,45 +71,36 @@ const ProductsEnhanced = () => {
   });
 
   // Available options for cascading filters (base lists + products + custom additions)
-  const availableCompanies = useMemo(() => {
-    const fromProducts = Array.from(new Set(products.map(p => p.company).filter(Boolean)));
-    const all = Array.from(new Set([...(companies || []), ...fromProducts, ...customCompanies]));
-    return all.sort();
-  }, [products, companies, customCompanies]);
-
   const availableCategories = useMemo(() => {
     const fromProducts = Array.from(
       new Set(
         products
-          .filter(p => !selectedCompany || p.company === selectedCompany)
           .map(p => p.category)
           .filter(Boolean)
       )
     );
-    const base = categories || [];
-    const customForCompany = customCategories[selectedCompany] || [];
+    const base = (categories || []).filter(c => !deletedCategories.includes(c));
     const customGeneral = customCategories['General'] || [];
-    const all = Array.from(new Set([...base, ...fromProducts, ...customForCompany, ...customGeneral]));
+    const all = Array.from(new Set([...base, ...fromProducts, ...customGeneral]));
     return all.sort();
-  }, [products, categories, selectedCompany, customCategories]);
+  }, [products, categories, customCategories, deletedCategories]);
 
   const availableSubcategories = useMemo(() => {
     const fromProducts = Array.from(
       new Set(
         products
-          .filter(p => (!selectedCompany || p.company === selectedCompany) && (!selectedCategory || p.category === selectedCategory))
+          .filter(p => !selectedCategory || p.category === selectedCategory)
           .map(p => p.subcategory)
           .filter(Boolean)
       )
     );
-    const companyName = selectedCompany || 'General';
     const categoryName = selectedCategory || '';
-    const key = `${companyName}|${categoryName}`;
-    const base = categoryName ? (subcategories[categoryName] || []) : [];
-    const customForPair = customSubcategories[key] || [];
-    const customGeneral = customSubcategories[`General|${categoryName}`] || [];
+    const key = `${categoryName}`;
+    const base = categoryName ? (subcategories[categoryName] || []).filter(s => !deletedSubcategories.includes(s)) : [];
+    const customForCategory = customSubcategories[key] || [];
+    const customGeneral = customSubcategories['General'] || [];
     // Get all custom subcategories for any category if no specific category selected
-    let allCustom = [...customForPair, ...customGeneral];
+    let allCustom = [...customForCategory, ...customGeneral];
     if (!categoryName) {
       Object.keys(customSubcategories).forEach(k => {
         allCustom = [...allCustom, ...customSubcategories[k]];
@@ -99,7 +108,7 @@ const ProductsEnhanced = () => {
     }
     const all = Array.from(new Set([...base, ...fromProducts, ...allCustom]));
     return all.sort();
-  }, [products, subcategories, selectedCompany, selectedCategory, customSubcategories]);
+  }, [products, subcategories, selectedCategory, customSubcategories, deletedSubcategories]);
 
   // Filter products based on selections and "this month" filter
   const filteredProducts = useMemo(() => {
@@ -109,7 +118,6 @@ const ProductsEnhanced = () => {
     const lowerSearchQuery = searchQuery.toLowerCase().trim();
     
     return products.filter(product => {
-      if (selectedCompany && product.company !== selectedCompany) return false;
       if (selectedCategory && product.category !== selectedCategory) return false;
       // Smart subcategory matching - handle variations like "LED TV" matching "LED"
       if (selectedSubcategory && product.subcategory && !(
@@ -148,7 +156,7 @@ const ProductsEnhanced = () => {
       
       return true;
     });
-  }, [products, selectedCompany, selectedCategory, selectedSubcategory, filterThisMonth, searchQuery]);
+  }, [products, selectedCategory, selectedSubcategory, filterThisMonth, searchQuery]);
   // New: Calculate average incentive for this month's filtered products
   const thisMonthProducts = useMemo(() => {
     const now = new Date();
@@ -179,7 +187,7 @@ const ProductsEnhanced = () => {
   // Reset to first page whenever filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedCompany, selectedCategory, selectedSubcategory]);
+  }, [selectedCategory, selectedSubcategory]);
 
   const totalPages = Math.max(1, Math.ceil(filteredProducts.length / pageSize));
 
@@ -218,68 +226,63 @@ const ProductsEnhanced = () => {
     : 0;
 
   // Reset dependent filters when parent changes
-  const handleCompanyChange = (company) => {
-    setSelectedCompany(company);
-    setSelectedCategory('');
-    setSelectedSubcategory('');
-  };
-
   const handleCategoryChange = (category) => {
     setSelectedCategory(category);
     setSelectedSubcategory(''); // Reset subcategory
   };
 
   // Custom dropdown select + delete handlers
-  const handleSelectCompanyFromDropdown = (company) => {
-    handleCompanyChange(company);
-    setIsCompanyDropdownOpen(false);
-  };
-
-  const handleDeleteCompanyFromDropdown = (company) => {
-    if (!company) return;
-    const ok = window.confirm(`Delete company "${company}" from the list?`);
-    if (!ok) return;
-    setCustomCompanies(prev => prev.filter(c => c !== company));
-    if (selectedCompany === company) {
-      setSelectedCompany('');
-      setSelectedCategory('');
-      setSelectedSubcategory('');
-    }
-    setIsCompanyDropdownOpen(false);
-  };
-
   const handleSelectCategoryFromDropdown = (category) => {
     handleCategoryChange(category);
     setIsCategoryDropdownOpen(false);
   };
 
-  const handleDeleteCategoryFromDropdown = (category) => {
+  const handleDeleteCategoryFromDropdown = async (category) => {
     if (!category) return;
-    const ok = window.confirm(`Delete category "${category}" from the list?`);
+    const ok = window.confirm(`Delete category "${category}" and all its data?`);
     if (!ok) return;
-    setCustomCategories(prev => {
-      const updated = { ...prev };
-      Object.keys(updated).forEach(key => {
-        updated[key] = updated[key].filter(c => c !== category);
-        if (updated[key].length === 0) delete updated[key];
+    
+    try {
+      // Check if it's a custom category
+      const isCustom = Object.values(customCategories).some(items => items.includes(category));
+      
+      if (isCustom) {
+        // Remove from custom categories
+        setCustomCategories(prev => {
+          const updated = { ...prev };
+          Object.keys(updated).forEach(key => {
+            updated[key] = updated[key].filter(c => c !== category);
+            if (updated[key].length === 0) delete updated[key];
+          });
+          return updated;
+        });
+      } else {
+        // Mark as deleted (it's a default category)
+        setDeletedCategories(prev => [...prev, category]);
+      }
+      
+      // Also remove related subcategories from custom list
+      setCustomSubcategories(prev => {
+        const updated = {};
+        Object.keys(prev).forEach(key => {
+          const cat = key.split('|')[1];
+          if (cat !== category) {
+            updated[key] = prev[key];
+          }
+        });
+        return updated;
       });
-      return updated;
-    });
-    setCustomSubcategories(prev => {
-      const updated = {};
-      Object.keys(prev).forEach(key => {
-        const [company, cat] = key.split('|');
-        if (cat !== category) {
-          updated[key] = prev[key];
-        }
-      });
-      return updated;
-    });
-    if (selectedCategory === category) {
-      setSelectedCategory('');
-      setSelectedSubcategory('');
+      
+      if (selectedCategory === category) {
+        setSelectedCategory('');
+        setSelectedSubcategory('');
+      }
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      alert('Failed to delete category: ' + (error.message || 'Unknown error'));
+    } finally {
+      setIsCategoryDropdownOpen(false);
     }
-    setIsCategoryDropdownOpen(false);
   };
 
   const handleSelectSubcategoryFromDropdown = (subcategory) => {
@@ -287,43 +290,50 @@ const ProductsEnhanced = () => {
     setIsSubcategoryDropdownOpen(false);
   };
 
-  const handleDeleteSubcategoryFromDropdown = (subcategory) => {
+  const handleDeleteSubcategoryFromDropdown = async (subcategory) => {
     if (!subcategory) return;
-    const ok = window.confirm(`Delete subcategory "${subcategory}" from the list?`);
+    const ok = window.confirm(`Delete subcategory "${subcategory}" and all its data?`);
     if (!ok) return;
-    setCustomSubcategories(prev => {
-      const updated = {};
-      Object.keys(prev).forEach(key => {
-        updated[key] = prev[key].filter(s => s !== subcategory);
-        if (updated[key].length === 0) delete updated[key];
-      });
-      return updated;
-    });
-    if (selectedSubcategory === subcategory) {
-      setSelectedSubcategory('');
+    
+    try {
+      // Check if it's a custom subcategory
+      const isCustom = Object.values(customSubcategories).some(items => items.includes(subcategory));
+      
+      if (isCustom) {
+        // Remove from custom subcategories
+        setCustomSubcategories(prev => {
+          const updated = {};
+          Object.keys(prev).forEach(key => {
+            updated[key] = prev[key].filter(s => s !== subcategory);
+            if (updated[key].length === 0) delete updated[key];
+          });
+          return updated;
+        });
+      } else {
+        // Mark as deleted (it's a default subcategory)
+        setDeletedSubcategories(prev => [...prev, subcategory]);
+      }
+      
+      if (selectedSubcategory === subcategory) {
+        setSelectedSubcategory('');
+      }
+    } catch (error) {
+      console.error('Error deleting subcategory:', error);
+      alert('Failed to delete subcategory: ' + (error.message || 'Unknown error'));
+    } finally {
+      setIsSubcategoryDropdownOpen(false);
     }
-    setIsSubcategoryDropdownOpen(false);
   };
 
   // Plus-button handlers for adding new options
-  const handleAddCompany = () => {
-    const name = window.prompt('Enter new company name');
-    if (!name) return;
-    setCustomCompanies(prev => (prev.includes(name) ? prev : [...prev, name]));
-    setSelectedCompany(name);
-    setSelectedCategory('');
-    setSelectedSubcategory('');
-  };
-
   const handleAddCategory = () => {
     const name = window.prompt('Enter new category name');
     if (!name) return;
-    const companyKey = selectedCompany || 'General';
     setCustomCategories(prev => ({
       ...prev,
-      [companyKey]: prev[companyKey]?.includes(name)
-        ? prev[companyKey]
-        : [...(prev[companyKey] || []), name],
+      'General': prev['General']?.includes(name)
+        ? prev['General']
+        : [...(prev['General'] || []), name],
     }));
     setSelectedCategory(name);
     setSelectedSubcategory('');
@@ -332,9 +342,8 @@ const ProductsEnhanced = () => {
   const handleAddSubcategory = () => {
     const name = window.prompt('Enter new subcategory name');
     if (!name) return;
-    const companyKey = selectedCompany || 'General';
     const categoryKey = selectedCategory || 'General';
-    const key = `${companyKey}|${categoryKey}`;
+    const key = `${categoryKey}`;
     setCustomSubcategories(prev => ({
       ...prev,
       [key]: prev[key]?.includes(name) ? prev[key] : [...(prev[key] || []), name],
@@ -343,25 +352,14 @@ const ProductsEnhanced = () => {
   };
 
   // Plus-button handlers for adding options directly from the form
-  const handleFormAddCompany = () => {
-    const name = window.prompt('Enter new company name');
-    if (!name) return;
-    setCustomCompanies(prev => (prev.includes(name) ? prev : [...prev, name]));
-    setFormData(prev => ({
-      ...prev,
-      company: name,
-    }));
-  };
-
   const handleFormAddCategory = () => {
     const name = window.prompt(`Enter category name:`);
     if (!name) return;
-    const companyName = formData.company || 'General';
     setCustomCategories(prev => ({
       ...prev,
-      [companyName]: prev[companyName]?.includes(name)
-        ? prev[companyName]
-        : [...(prev[companyName] || []), name],
+      'General': prev['General']?.includes(name)
+        ? prev['General']
+        : [...(prev['General'] || []), name],
     }));
     setFormData(prev => ({
       ...prev,
@@ -373,9 +371,8 @@ const ProductsEnhanced = () => {
   const handleFormAddSubcategory = () => {
     const name = window.prompt(`Enter subcategory name:`);
     if (!name) return;
-    const companyName = formData.company || 'General';
     const categoryName = formData.category || 'General';
-    const key = `${companyName}|${categoryName}`;
+    const key = `${categoryName}`;
     setCustomSubcategories(prev => ({
       ...prev,
       [key]: prev[key]?.includes(name) ? prev[key] : [...(prev[key] || []), name],
@@ -391,7 +388,6 @@ const ProductsEnhanced = () => {
     if (product) {
       setEditingProduct(product);
       setFormData({
-        company: product.company || '',
         category: product.category || '',
         subcategory: product.subcategory || '',
         name: product.name ?? '',
@@ -403,7 +399,6 @@ const ProductsEnhanced = () => {
     } else {
       setEditingProduct(null);
       setFormData({
-        company: '',
         category: '',
         subcategory: '',
         name: '',
@@ -425,17 +420,12 @@ const ProductsEnhanced = () => {
   e.preventDefault();
   
   // Cascading validation
-  if (formData.company && !formData.category) {
-    alert('Please select Category for the selected Company');
-    return;
-  }
   if (formData.category && !formData.subcategory) {
     alert('Please select Subcategory for the selected Category');
     return;
   }
   
   const productData = {
-    company: formData.company,
     category: formData.category,
     subcategory: formData.subcategory,
     name: formData.name,
@@ -532,48 +522,31 @@ const ProductsEnhanced = () => {
     return;
   }
 
-  const headers = ['Company', 'Category', 'Subcategory', 'Product Name', 'MRP', 'Price', 'Bottom Price', 'Incentive']; // ADDED MRP
+  const headers = ['Category', 'Subcategory', 'Product Name', 'MRP', 'Price', 'Bottom Price', 'Incentive'];
   const rows = products.map(p => [
-    p.company || '',
     p.category || '',
     p.subcategory || '',
     p.name || '',
-    p.mrp ?? '', // ADD THIS
+    p.mrp ?? '',
     p.price ?? '',
     p.minPrice ?? '',
     p.incentive ?? '',
   ]);
 
-    const csvContent = [headers, ...rows]
-      .map(row => row
-        .map(value => {
-          const str = value === null || value === undefined ? '' : String(value);
-          if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-            return '"' + str.replace(/"/g, '""') + '"';
-          }
-          return str;
-        })
-        .join(','),
-      )
-      .join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', 'products-export.csv');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+  // Create workbook with headers and data
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Products');
+  
+  // Write file
+  XLSX.writeFile(wb, 'products-export.xlsx');
   };
 
   // Get available categories/subcategories for the form (respect custom additions)
   const formAvailableCategories = useMemo(() => {
     const base = categories || [];
-    const customForCompany = customCategories[formData.company] || [];
     const customGeneral = customCategories['General'] || [];
-    let all = Array.from(new Set([...base, ...customForCompany, ...customGeneral]));
+    let all = Array.from(new Set([...base, ...customGeneral]));
     
     // Always include the editing product's category if it exists
     if (editingProduct && editingProduct.category && !all.includes(editingProduct.category)) {
@@ -581,15 +554,14 @@ const ProductsEnhanced = () => {
     }
     
     return all;
-  }, [categories, customCategories, formData.company, editingProduct]);
+  }, [categories, customCategories, editingProduct]);
 
   const formAvailableSubcategories = useMemo(() => {
     const base = formData.category ? (subcategories[formData.category] || []) : [];
-    const companyName = formData.company || 'General';
-    const key = `${companyName}|${formData.category}`;
-    const customForPair = customSubcategories[key] || [];
-    const customGeneral = customSubcategories[`General|${formData.category}`] || [];
-    let all = Array.from(new Set([...base, ...customForPair, ...customGeneral]));
+    const key = `${formData.category}`;
+    const customForCategory = customSubcategories[key] || [];
+    const customGeneral = customSubcategories['General'] || [];
+    let all = Array.from(new Set([...base, ...customForCategory, ...customGeneral]));
     
     // Always include the editing product's subcategory if it exists
     if (editingProduct && editingProduct.subcategory && !all.includes(editingProduct.subcategory)) {
@@ -597,7 +569,7 @@ const ProductsEnhanced = () => {
     }
     
     return all;
-  }, [formData.company, formData.category, subcategories, customSubcategories, editingProduct]);
+  }, [formData.category, subcategories, customSubcategories, editingProduct]);
 
   if (productsLoading && products.length === 0) {
     return (
@@ -730,66 +702,7 @@ const ProductsEnhanced = () => {
           )}
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Company Filter - custom dropdown with hover delete */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Company
-              </span>
-              <button
-                type="button"
-                onClick={handleAddCompany}
-                className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary text-white text-xs hover:bg-primary-600"
-                title="Add Company"
-              >
-                <Plus className="w-3 h-3" />
-              </button>
-            </div>
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setIsCompanyDropdownOpen(prev => !prev)}
-                className="input-field w-full flex items-center justify-between"
-              >
-                <span>{selectedCompany || 'Select Company'}</span>
-                <span className="ml-2 text-gray-400">▾</span>
-              </button>
-              {isCompanyDropdownOpen && (
-                <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-auto">
-                  {availableCompanies.length === 0 && (
-                    <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">No companies</div>
-                  )}
-                  {availableCompanies.map(company => (
-                    <div
-                      key={company}
-                      className="flex items-center justify-between px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 group"
-                    >
-                      <button
-                        type="button"
-                        className="flex-1 text-left text-gray-800 dark:text-gray-100"
-                        onClick={() => handleSelectCompanyFromDropdown(company)}
-                      >
-                        {company}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteCompanyFromDropdown(company);
-                        }}
-                        className="ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white text-[10px] opacity-0 group-hover:opacity-100 hover:bg-red-600"
-                        title="Delete this company"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Category Filter - custom dropdown with hover delete */}
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -800,7 +713,7 @@ const ProductsEnhanced = () => {
                 type="button"
                 onClick={handleAddCategory}
                 className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary text-white text-xs hover:bg-primary-600"
-                title="Add Category for selected company"
+                title="Add Category"
               >
                 <Plus className="w-3 h-3" />
               </button>
@@ -910,10 +823,9 @@ const ProductsEnhanced = () => {
         </div>
 
         {/* Clear Filters */}
-        {(selectedCompany || selectedCategory || selectedSubcategory) && (
+        {(selectedCategory || selectedSubcategory) && (
           <button
             onClick={() => {
-              setSelectedCompany('');
               setSelectedCategory('');
               setSelectedSubcategory('');
               setSearchQuery('');
@@ -952,20 +864,20 @@ const ProductsEnhanced = () => {
         <div className="card bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border border-purple-200 dark:border-purple-700">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-purple-600 dark:text-purple-400 mb-1">Total Value</p>
-              <h3 className="text-2xl font-bold text-purple-700 dark:text-purple-300">
-                ₹{(filteredProducts.reduce((sum, p) => sum + (p.price || 0), 0) / 1000).toFixed(0)}k
+              <p className="text-sm text-purple-600 dark:text-purple-400 mb-1">Products Added (This Month)</p>
+              <h3 className="text-3xl font-bold text-purple-700 dark:text-purple-300">
+                {thisMonthProducts.length}
               </h3>
             </div>
-            <DollarSign className="w-12 h-12 text-purple-500 opacity-50" />
+            <PackageIcon className="w-12 h-12 text-purple-500 opacity-50" />
           </div>
         </div>
       </div>
 
-      {/* Products List */}
-      <div className="card">
+      {/* Products Table */}
+      <div className="card overflow-x-auto">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          {selectedCompany || selectedCategory || selectedSubcategory ? 'Filtered Products' : 'All Products'}
+          {selectedCategory || selectedSubcategory ? 'Filtered Products' : 'All Products'}
         </h3>
         
         {filteredProducts.length === 0 ? (
@@ -974,103 +886,95 @@ const ProductsEnhanced = () => {
             <p className="text-gray-500 dark:text-gray-400">No products found with selected filters</p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {paginatedProducts.map((product, index) => (
-              <motion.div
-                key={product.id}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.05 }}
-                className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
-                onClick={() => {
-                  setDetailsProduct(product);
-                  setIsDetailsModalOpen(true);
-                }}
-              >
-                {/* Sr. No */}
-                <div className="w-10 h-10 flex items-center justify-center bg-primary-100 dark:bg-primary-900/40 text-primary dark:text-primary-300 font-semibold rounded-full flex-shrink-0">
-                  {index + 1}
-                </div>
-
-                {/* Product Info */}
-                <div className="flex-1 min-w-0">
-                  <h4 className="font-semibold text-gray-900 dark:text-white truncate">
-                    {product.name}
-                  </h4>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {product.company} • {product.category} • {product.subcategory}
-                  </p>
-                </div>
-
-                {/* Price Info and Action Buttons */}
-                <div className="flex flex-col gap-2 items-end">
-                  {/* Price Information */}
-                  <div className="text-right space-y-1 mb-2">
-                    {/* MRP removed as per request */}
-                    <div className="text-xs">
-                      <span className="text-gray-600 dark:text-gray-400">Sales Price: </span>
-                      <span className="font-bold text-green-600 dark:text-green-400">
+          <>
+            <div className="inline-block min-w-full">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="bg-gray-100 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-600">
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Sr.</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Product Name</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Category</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Subcategory</th>
+                    <th className="px-4 py-3 text-right text-sm font-semibold text-gray-900 dark:text-white">Sales Price</th>
+                    <th className="px-4 py-3 text-right text-sm font-semibold text-gray-900 dark:text-white">MRP</th>
+                    <th className="px-4 py-3 text-right text-sm font-semibold text-gray-900 dark:text-white">Best Price</th>
+                    <th className="px-4 py-3 text-right text-sm font-semibold text-gray-900 dark:text-white">Incentive</th>
+                    <th className="px-4 py-3 text-center text-sm font-semibold text-gray-900 dark:text-white">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedProducts.map((product, index) => (
+                    <motion.tr
+                      key={product.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: index * 0.05 }}
+                      className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors cursor-pointer"
+                      onClick={() => {
+                        setDetailsProduct(product);
+                        setIsDetailsModalOpen(true);
+                      }}
+                    >
+                      <td className="px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white">
+                        {((currentPage - 1) * pageSize) + index + 1}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-white font-medium max-w-xs truncate">
+                        {product.name}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                        {product.category || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                        {product.subcategory || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-sm font-semibold text-green-600 dark:text-green-400 text-right">
                         ₹{(product.price !== undefined && product.price !== null && product.price !== '' ? Number(product.price).toLocaleString() : '—')}
-                      </span>
-                    </div>
-
-                    <div className="text-xs">
-  <span className="text-gray-600 dark:text-gray-400">MRP: </span>
-  <span className="font-semibold text-gray-500 dark:text-gray-400 line-through">
-    ₹{(product.mrp !== undefined && product.mrp !== null && product.mrp !== '' && !isNaN(product.mrp))
-      ? Number(product.mrp).toLocaleString()
-      : '—'}
-  </span>
-</div>
-
-                    <div className="text-xs">
-                      <span className="text-gray-600 dark:text-gray-400">Best Price: </span>
-                      <span className="font-semibold text-gray-700 dark:text-gray-300">
-                        ₹{product.minPrice !== undefined && product.minPrice !== null && product.minPrice !== '' && !isNaN(product.minPrice)
-                          ? Number(product.minPrice).toLocaleString()
-                          : ''}
-                      </span>
-                    </div>
-                    <div className="text-xs">
-                      <span className="text-gray-600 dark:text-gray-400">Incentive: </span>
-                      <span className="font-semibold text-blue-600 dark:text-blue-400">
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 text-right line-through">
+                        ₹{(product.mrp !== undefined && product.mrp !== null && product.mrp !== '' && !isNaN(product.mrp) ? Number(product.mrp).toLocaleString() : '—')}
+                      </td>
+                      <td className="px-4 py-3 text-sm font-semibold text-gray-700 dark:text-gray-300 text-right">
+                        ₹{(product.minPrice !== undefined && product.minPrice !== null && product.minPrice !== '' && !isNaN(product.minPrice) ? Number(product.minPrice).toLocaleString() : '—')}
+                      </td>
+                      <td className="px-4 py-3 text-sm font-semibold text-blue-600 dark:text-blue-400 text-right">
                         ₹{(product.incentive !== undefined && product.incentive !== null && product.incentive !== '' ? Number(product.incentive).toLocaleString() : '—')}
-                      </span>
-                    </div>
-                  </div>
-                  
-                  {/* Action Buttons */}
-                  <div className="flex gap-2">
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenModal(product);
-                      }}
-                      className="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
-                      title="Edit Product"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </motion.button>
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(product.id);
-                      }}
-                      className="p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
-                      title="Delete Product"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </motion.button>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <div className="flex gap-2 justify-center" onClick={(e) => e.stopPropagation()}>
+                          <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenModal(product);
+                            }}
+                            className="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+                            title="Edit Product"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </motion.button>
+                          <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(product.id);
+                            }}
+                            className="p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
+                            title="Delete Product"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </motion.button>
+                        </div>
+                      </td>
+                    </motion.tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
             {/* Pagination Controls */}
-            <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700 mt-4">
+            <div className="flex items-center justify-between pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 Page {currentPage} of {totalPages} 
                 <span className="ml-2 text-xs text-gray-500 dark:text-gray-500">
@@ -1096,7 +1000,7 @@ const ProductsEnhanced = () => {
                 </button>
               </div>
             </div>
-          </div>
+          </>
         )}
       </div>
 
@@ -1137,33 +1041,6 @@ const ProductsEnhanced = () => {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Company */}
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Company
-                          </label>
-                          <button
-                            type="button"
-                            onClick={handleFormAddCompany}
-                            className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary text-white text-xs hover:bg-primary-600"
-                            title="Add Company"
-                          >
-                            <Plus className="w-3 h-3" />
-                          </button>
-                        </div>
-                        <select
-                          value={formData.company}
-                          onChange={(e) => setFormData({ ...formData, company: e.target.value, category: '', subcategory: '' })}
-                          className="input-field"
-                        >
-                          <option value="">Select Company</option>
-                          {Array.from(new Set([...(companies || []), ...customCompanies])).map(company => (
-                            <option key={company} value={company}>{company}</option>
-                          ))}
-                        </select>
-                      </div>
-
                       {/* Category */}
                       <div>
                         <div className="flex items-center justify-between mb-2">
