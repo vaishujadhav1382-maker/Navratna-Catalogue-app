@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { collectionGroup, getDocs, addDoc, collection, doc, getDoc } from 'firebase/firestore';
+import { collectionGroup, getDocs, addDoc, collection, doc, getDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useApp } from '../context/AppContext';
-import { ClipboardList, Calendar, User, MessageCircle, ChevronDown, ChevronUp, Filter, CheckCircle, XCircle, Clock, Download } from 'lucide-react';
+import { ClipboardList, Calendar, User, MessageCircle, ChevronDown, ChevronUp, Filter, CheckCircle, XCircle, Clock, Download, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as XLSX from 'xlsx';
 
@@ -26,9 +26,12 @@ const FollowUp = () => {
     // Filter States
     const [selectedEmployee, setSelectedEmployee] = useState('all');
     const [statusFilter, setStatusFilter] = useState('pending');
-    const [dateFilter, setDateFilter] = useState('');
+    const [dateFilterStart, setDateFilterStart] = useState('');
+    const [dateFilterEnd, setDateFilterEnd] = useState('');
     // Search bar state
     const [searchTerm, setSearchTerm] = useState("");
+    // Delete confirmation state
+    const [deleteConfirm, setDeleteConfirm] = useState(null);
 
     // Get salesman name from ID
     const getSalesmanNameById = (salesmanId) => {
@@ -135,13 +138,37 @@ const FollowUp = () => {
 
     const handleTodayClick = () => {
         const today = new Date().toISOString().split('T')[0];
-        setDateFilter(today);
+        setDateFilterStart(today);
+        setDateFilterEnd(today);
     };
 
     const clearFilters = () => {
         setSelectedEmployee('all');
         setStatusFilter('all');
-        setDateFilter('');
+        setDateFilterStart('');
+        setDateFilterEnd('');
+    };
+
+    const handleDeleteAppointment = async (appointmentId) => {
+        try {
+            // Find the appointment to get its path
+            const appointment = appointments.find(apt => apt.id === appointmentId);
+            if (!appointment) return;
+
+            // Query to find the document in the nested structure
+            const querySnapshot = await getDocs(collectionGroup(db, 'appointments'));
+            const docToDelete = querySnapshot.docs.find(doc => doc.id === appointmentId);
+            
+            if (docToDelete) {
+                await deleteDoc(docToDelete.ref);
+                // Remove from state
+                setAppointments(appointments.filter(apt => apt.id !== appointmentId));
+                setDeleteConfirm(null);
+            }
+        } catch (error) {
+            console.error('Error deleting appointment:', error);
+            alert('Error deleting appointment');
+        }
     };
 
     const exportToExcel = () => {
@@ -156,22 +183,18 @@ const FollowUp = () => {
             if (rootStatus.includes('cancel')) {
                 displayStatus = 'Cancelled';
             } else if (rootStatus === 'complete' || rootStatus === 'purchased') {
-                displayStatus = 'Complete';
+                displayStatus = 'Purchased';
             } else if (apt.products && apt.products.some(p => (p.status || '').toLowerCase().includes('cancel'))) {
                 displayStatus = 'Cancelled (Product)';
             }
 
-            // If filtering by date, show the matched date
-            if (dateFilter) {
-                const formattedFilterDate = formatDateForComparison(dateFilter);
-                const mainMatch = (apt.date === formattedFilterDate) || (apt.createdDate === formattedFilterDate);
-
-                if (mainMatch) {
-                    displayDate = formattedFilterDate;
-                } else if (apt.followUps) {
-                    const matchedFollowUp = apt.followUps.find(f => (f.date || '').trim() === formattedFilterDate);
-                    if (matchedFollowUp) {
-                        displayDate = matchedFollowUp.date;
+            // If filtering by date, show the last interaction date
+            if (dateFilterStart || dateFilterEnd) {
+                // Show last interaction date
+                if (apt.followUps && apt.followUps.length > 0) {
+                    const lastFollowUp = apt.followUps[apt.followUps.length - 1];
+                    if (lastFollowUp && lastFollowUp.date) {
+                        displayDate = lastFollowUp.date;
                     }
                 }
             } else {
@@ -246,29 +269,49 @@ const FollowUp = () => {
             // Check nested products status
             const productsStatus = apt.products && apt.products.some(p => (p.status || '').toLowerCase().includes(filter));
 
-            // Handle "Cancel" vs "Cancelled" discrepancy
+            // Handle special cases
             if (filter === 'cancel' || filter === 'cancelled') {
                 const isRootCancel = rootStatus.includes('cancel');
                 matchStatus = isRootCancel || productsStatus;
+            } else if (filter === 'complete') {
+                // Treat both 'complete' and 'purchased' as complete
+                const isRootComplete = rootStatus === 'complete' || rootStatus === 'purchased';
+                matchStatus = isRootComplete || productsStatus;
             } else {
                 matchStatus = rootStatus === filter || productsStatus;
             }
         }
 
-        // 3. Date Filter
+        // 3. Date Filter (Range)
         // DB Format: "20/12/2025" (DD/MM/YYYY)
         let matchDate = true;
-        if (dateFilter) {
-            const formattedFilterDate = formatDateForComparison(dateFilter);
+        if (dateFilterStart || dateFilterEnd) {
+            const startDate = dateFilterStart ? formatDateForComparison(dateFilterStart) : null;
+            const endDate = dateFilterEnd ? formatDateForComparison(dateFilterEnd) : null;
 
-            // Check formatted date against apt.date, createdDate, OR nested followUps
-            const checkDate = (d) => (d || '').trim() === formattedFilterDate;
+            const dateToCheck = apt.followUps && apt.followUps.length > 0 
+                ? apt.followUps[apt.followUps.length - 1].date 
+                : (apt.date || apt.createdDate);
 
-            const mainDateMatch = checkDate(apt.date) || checkDate(apt.createdDate);
-            // Check if ANY follow-up in the history matches the date
-            const followUpMatch = apt.followUps && apt.followUps.some(f => checkDate(f.date));
-
-            matchDate = mainDateMatch || followUpMatch;
+            if (dateToCheck) {
+                const [d, m, y] = dateToCheck.split('/');
+                const checkDateObj = new Date(y, m - 1, d);
+                
+                let inRange = true;
+                if (startDate) {
+                    const [sd, sm, sy] = startDate.split('/');
+                    const startDateObj = new Date(sy, sm - 1, sd);
+                    inRange = inRange && checkDateObj >= startDateObj;
+                }
+                if (endDate) {
+                    const [ed, em, ey] = endDate.split('/');
+                    const endDateObj = new Date(ey, em - 1, ed);
+                    inRange = inRange && checkDateObj <= endDateObj;
+                }
+                matchDate = inRange;
+            } else {
+                matchDate = false;
+            }
         }
 
         // 4. Search Filter
@@ -337,88 +380,105 @@ const FollowUp = () => {
                 </div>
 
                 {/* Filters Section */}
-                <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 flex flex-wrap items-center gap-3">
-                    <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mr-2">
-                        <Filter className="w-4 h-4" /> Filters:
+                <div className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                    <div className="flex flex-col gap-3">
+                        <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                            <Filter className="w-4 h-4" /> Filters:
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                            {/* Search Bar */}
+                            <input
+                                type="text"
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                                placeholder="Search..."
+                                className="px-2 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-xs focus:ring-2 focus:ring-primary/50 outline-none"
+                            />
+
+                            {/* Employee Filter */}
+                            <select
+                                value={selectedEmployee}
+                                onChange={(e) => setSelectedEmployee(e.target.value)}
+                                className="px-2 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-xs focus:ring-2 focus:ring-primary/50 outline-none cursor-pointer"
+                            >
+                                <option value="all">All Employees</option>
+                                {employees.map(emp => (
+                                    <option key={emp.id} value={emp.id}>{emp.name}</option>
+                                ))}
+                            </select>
+
+                            {/* Status Filter */}
+                            <select
+                                value={statusFilter}
+                                onChange={(e) => setStatusFilter(e.target.value)}
+                                className="px-2 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-xs focus:ring-2 focus:ring-primary/50 outline-none cursor-pointer"
+                            >
+                                <option value="all">All Status</option>
+                                <option value="pending">Pending</option>
+                                <option value="complete">Purchased</option>
+                                <option value="cancelled">Cancelled</option>
+                            </select>
+
+                            {/* Date Filter From */}
+                            <div className="flex items-center bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
+                                <span className="px-2 py-2 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">From:</span>
+                                <input
+                                    type="date"
+                                    value={dateFilterStart}
+                                    onChange={(e) => setDateFilterStart(e.target.value)}
+                                    className="px-1 py-2 bg-transparent text-xs outline-none cursor-pointer dark:text-white flex-1"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                            {/* Date Filter To */}
+                            <div className="flex items-center bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
+                                <span className="px-2 py-2 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">To:</span>
+                                <input
+                                    type="date"
+                                    value={dateFilterEnd}
+                                    onChange={(e) => setDateFilterEnd(e.target.value)}
+                                    className="px-1 py-2 bg-transparent text-xs outline-none cursor-pointer dark:text-white flex-1"
+                                />
+                            </div>
+
+                            {/* Filter Actions */}
+                            <button
+                                onClick={handleTodayClick}
+                                className="px-2 py-2 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 rounded-lg text-xs font-medium hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors flex items-center justify-center gap-1 whitespace-nowrap"
+                            >
+                                <Clock className="w-3 h-3" />
+                                Today
+                            </button>
+
+                            {(selectedEmployee !== 'all' || statusFilter !== 'all' || dateFilterStart || dateFilterEnd) && (
+                                <button
+                                    onClick={clearFilters}
+                                    className="px-2 py-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-xs font-medium underline rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors whitespace-nowrap"
+                                >
+                                    Clear All
+                                </button>
+                            )}
+                        </div>
                     </div>
-
-                    {/* Search Bar */}
-                    <input
-                        type="text"
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
-                        placeholder="Search by name, number, product..."
-                        className="px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-primary/50 outline-none"
-                        style={{ minWidth: 200 }}
-                    />
-
-                    {/* Employee Filter */}
-                    <select
-                        value={selectedEmployee}
-                        onChange={(e) => setSelectedEmployee(e.target.value)}
-                        className="px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-primary/50 outline-none cursor-pointer"
-                    >
-                        <option value="all">All Employees</option>
-                        {employees.map(emp => (
-                            <option key={emp.id} value={emp.id}>{emp.name}</option>
-                        ))}
-                    </select>
-
-                    {/* Status Filter */}
-                    <select
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                        className="px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-primary/50 outline-none cursor-pointer"
-                    >
-                        <option value="all">All Status</option>
-                        <option value="pending">Pending</option>
-                        <option value="complete">Complete</option>
-                        <option value="cancelled">Cancelled</option>
-                    </select>
-
-                    {/* Date Filter */}
-                    <div className="flex items-center bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
-                        <input
-                            type="date"
-                            value={dateFilter}
-                            onChange={(e) => setDateFilter(e.target.value)}
-                            className="pl-3 pr-2 py-2 bg-transparent text-sm outline-none cursor-pointer dark:text-white"
-                        />
-                    </div>
-
-                    {/* Filter Actions */}
-                    <button
-                        onClick={handleTodayClick}
-                        className="px-3 py-2 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 rounded-lg text-sm font-medium hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors flex items-center gap-1"
-                    >
-                        <Clock className="w-3.5 h-3.5" />
-                        Today
-                    </button>
-
-                    {(selectedEmployee !== 'all' || statusFilter !== 'all' || dateFilter) && (
-                        <button
-                            onClick={clearFilters}
-                            className="px-3 py-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-sm font-medium underline"
-                        >
-                            Clear All
-                        </button>
-                    )}
                 </div>
             </div>
 
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full">
+                    <table className="w-full text-sm">
                         <thead className="bg-gray-50 dark:bg-gray-700/50">
                             <tr>
-                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Name</th>
-                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Number</th>
-                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">First Visit Date</th>
-                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Product 1</th>
-                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Salesman</th>
-                                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Follow Ups</th>
-                                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
-                                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
+                                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Name</th>
+                                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Number</th>
+                                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">1st Visit</th>
+                                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Product</th>
+                                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Salesman</th>
+                                <th className="px-3 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">F/U</th>
+                                <th className="px-3 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                                <th className="px-3 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -434,23 +494,18 @@ const FollowUp = () => {
                                     displayStatus = 'Cancelled';
                                     statusColor = 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
                                 } else if (rootStatus === 'complete' || rootStatus === 'purchased') {
+                                    displayStatus = 'Purchased';
                                     statusColor = 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
                                 } else if (apt.products && apt.products.some(p => (p.status || '').toLowerCase().includes('cancel'))) {
                                     displayStatus = 'Cancelled (Product)';
                                     statusColor = 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
                                 }
-                                // If filtering by date, we prefer to show the date that MATCHED the filter
-                                if (dateFilter) {
-                                    const formattedFilterDate = formatDateForComparison(dateFilter);
-                                    // Check if main date matches
-                                    const mainMatch = (apt.date === formattedFilterDate) || (apt.createdDate === formattedFilterDate);
-                                    if (mainMatch) {
-                                        displayDate = formattedFilterDate;
-                                    } else if (apt.followUps) {
-                                        // Find the follow-up that matched
-                                        const matchedFollowUp = apt.followUps.find(f => (f.date || '').trim() === formattedFilterDate);
-                                        if (matchedFollowUp) {
-                                            displayDate = matchedFollowUp.date;
+                                // If filtering by date, show last interaction
+                                if (dateFilterStart || dateFilterEnd) {
+                                    if (apt.followUps && apt.followUps.length > 0) {
+                                        const lastFollowUp = apt.followUps[apt.followUps.length - 1];
+                                        if (lastFollowUp && lastFollowUp.date) {
+                                            displayDate = lastFollowUp.date;
                                         }
                                     }
                                 } else {
@@ -469,49 +524,58 @@ const FollowUp = () => {
                                 return (
                                     <React.Fragment key={apt.id}>
                                         <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="flex items-center">
-                                                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
+                                            <td className="px-3 py-2 whitespace-nowrap">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
                                                         {apt.customerName?.charAt(0).toUpperCase()}
                                                     </div>
-                                                    <div className="ml-4">
-                                                        <div className="text-sm font-medium text-gray-900 dark:text-white">{apt.customerName}</div>
+                                                    <div className="min-w-0">
+                                                        <div className="text-xs font-medium text-gray-900 dark:text-white truncate">{apt.customerName}</div>
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm text-gray-900 dark:text-white">{apt.customerMobile || "-"}</div>
+                                            <td className="px-3 py-2 whitespace-nowrap">
+                                                <div className="text-xs text-gray-900 dark:text-white">{apt.customerMobile || "-"}</div>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm text-gray-900 dark:text-white">{firstVisitDate}</div>
+                                            <td className="px-3 py-2 whitespace-nowrap">
+                                                <div className="text-xs text-gray-900 dark:text-white">{firstVisitDate}</div>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm text-gray-900 dark:text-white">{product1}</div>
+                                            <td className="px-3 py-2 whitespace-nowrap">
+                                                <div className="text-xs text-gray-900 dark:text-white truncate max-w-[100px]">{product1}</div>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm text-gray-900 dark:text-white">{apt.salesmanName || 'Unassigned'}</div>
+                                            <td className="px-3 py-2 whitespace-nowrap">
+                                                <div className="text-xs text-gray-900 dark:text-white truncate max-w-[100px]">{apt.salesmanName || 'Unassigned'}</div>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-center">
-                                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${(apt.followUps?.length || 0) > 0
+                                            <td className="px-3 py-2 whitespace-nowrap text-center">
+                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${(apt.followUps?.length || 0) > 0
                                                     ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
                                                     : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
                                                     }`}>
-                                                    {apt.followUps?.length || 0} Count
+                                                    {apt.followUps?.length || 0}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-center">
-                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColor}`}>
+                                            <td className="px-3 py-2 whitespace-nowrap text-center">
+                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusColor}`}>
                                                     {displayStatus}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                <button
-                                                    onClick={() => toggleExpand(apt.id)}
-                                                    className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 flex items-center justify-end w-full"
-                                                >
-                                                    {expandedRow === apt.id ? 'Hide Details' : 'View Details'}
-                                                    {expandedRow === apt.id ? <ChevronUp className="w-4 h-4 ml-1" /> : <ChevronDown className="w-4 h-4 ml-1" />}
-                                                </button>
+                                            <td className="px-3 py-2 whitespace-nowrap text-center">
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <button
+                                                        onClick={() => toggleExpand(apt.id)}
+                                                        className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 p-1"
+                                                        title={expandedRow === apt.id ? 'Hide' : 'View'}
+                                                    >
+                                                        {expandedRow === apt.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setDeleteConfirm(apt.id)}
+                                                        className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 p-1"
+                                                        title="Delete entry"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                         {/* Expanded Detail Row */}
@@ -522,26 +586,26 @@ const FollowUp = () => {
                                                     animate={{ opacity: 1, height: 'auto' }}
                                                     exit={{ opacity: 0, height: 0 }}
                                                 >
-                                                    <td colSpan="5" className="px-6 py-4 bg-gray-50 dark:bg-gray-800/50">
-                                                        <div className="space-y-4">
-                                                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center">
-                                                                <MessageCircle className="w-4 h-4 mr-2" />
+                                                    <td colSpan="8" className="px-3 py-3 bg-gray-50 dark:bg-gray-800/50">
+                                                        <div className="space-y-3">
+                                                            <h4 className="text-xs font-semibold text-gray-900 dark:text-white flex items-center">
+                                                                <MessageCircle className="w-3 h-3 mr-2" />
                                                                 Follow-up History
                                                             </h4>
                                                             {apt.followUps && apt.followUps.length > 0 ? (
-                                                                <div className="space-y-3">
+                                                                <div className="space-y-2">
                                                                     {apt.followUps.map((followUp, index) => (
-                                                                        <div key={index} className="flex gap-4 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                                                                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-xs font-bold text-blue-600 dark:text-blue-400">
+                                                                        <div key={index} className="flex gap-3 p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                                                            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-xs font-bold text-blue-600 dark:text-blue-400">
                                                                                 {index + 1}
                                                                             </div>
-                                                                            <div className="flex-1">
-                                                                                <div className="flex items-center justify-between mb-1">
+                                                                            <div className="flex-1 min-w-0">
+                                                                                <div className="flex items-center justify-between mb-0.5">
                                                                                     <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
                                                                                         {followUp.date}
                                                                                     </span>
                                                                                 </div>
-                                                                                <p className="text-sm text-gray-700 dark:text-gray-300">
+                                                                                <p className="text-xs text-gray-700 dark:text-gray-300 break-words">
                                                                                     {followUp.text}
                                                                                 </p>
                                                                             </div>
@@ -549,7 +613,7 @@ const FollowUp = () => {
                                                                     ))}
                                                                 </div>
                                                             ) : (
-                                                                <p className="text-sm text-gray-500 italic">No follow-up history records found.</p>
+                                                                <p className="text-xs text-gray-500 italic">No follow-up history records found.</p>
                                                             )}
                                                         </div>
                                                     </td>
@@ -561,7 +625,7 @@ const FollowUp = () => {
                             })}
                             {filteredAppointments.length === 0 && (
                                 <tr>
-                                    <td colSpan="5" className="px-6 py-10 text-center text-gray-500">
+                                    <td colSpan="8" className="px-3 py-8 text-center text-gray-500 text-sm">
                                         No appointments found.
                                     </td>
                                 </tr>
@@ -570,6 +634,52 @@ const FollowUp = () => {
                     </table>
                 </div>
             </div>
+
+            {/* Delete Confirmation Modal */}
+            <AnimatePresence>
+                {deleteConfirm && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+                        onClick={() => setDeleteConfirm(null)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-sm w-full p-5 border border-gray-200 dark:border-gray-700"
+                        >
+                            <div className="flex items-center justify-center w-10 h-10 mx-auto bg-red-100 dark:bg-red-900/30 rounded-full mb-4">
+                                <XCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
+                            </div>
+                            <h3 className="text-base font-semibold text-gray-900 dark:text-white text-center mb-1">
+                                Delete Entry
+                            </h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 text-center mb-5">
+                                Are you sure? This action cannot be undone.
+                            </p>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setDeleteConfirm(null)}
+                                    className="flex-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg text-sm font-medium transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={() => handleDeleteAppointment(deleteConfirm)}
+                                    className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1"
+                                >
+                                    <Trash2 className="w-3 h-3" />
+                                    Delete
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 };
