@@ -3,13 +3,22 @@ import { useApp } from '../context/AppContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Users, Package, DollarSign, Star, RefreshCw, Megaphone, Calendar, ChevronLeft, ChevronRight, Phone, MapPin, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { collection, getDocs, query, where, collectionGroup } from 'firebase/firestore';
+import { collection, getDocs, query, where, collectionGroup, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
 const Dashboard = () => {
   const { employees, products, employeesLoading, productsLoading, fetchEmployees, fetchProducts } = useApp();
   const [appointments, setAppointments] = useState([]);
   const [appointmentsLoading, setAppointmentsLoading] = useState(true);
+  const [salesmen, setSalesmen] = useState([]);
+
+  // Get salesman name from ID
+  const getSalesmanNameById = (salesmanId) => {
+    if (!salesmanId) return 'Unassigned';
+    const salesman = salesmen.find(s => s.id === salesmanId);
+    return salesman ? salesman.name : 'Unknown';
+  };
+
     // Fetch appointments for follow-up stats
     useEffect(() => {
       let isMounted = true;
@@ -17,7 +26,16 @@ const Dashboard = () => {
         setAppointmentsLoading(true);
         try {
           const querySnapshot = await getDocs(collectionGroup(db, 'appointments'));
-          const fetchedData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          const fetchedData = querySnapshot.docs.map((docSnap) => {
+            const data = docSnap.data();
+            const salesmanName = getSalesmanNameById(data.assignedTo);
+            
+            return { 
+              id: docSnap.id, 
+              ...data,
+              salesmanName
+            };
+          });
           if (isMounted) setAppointments(fetchedData);
         } catch (error) {
           if (isMounted) setAppointments([]);
@@ -27,7 +45,27 @@ const Dashboard = () => {
       };
       fetchAppointments();
       return () => { isMounted = false; };
-    }, []);
+    }, [salesmen]);
+
+  // Fetch salesmen from Firestore
+  useEffect(() => {
+    const fetchSalesmen = async () => {
+      try {
+        const salesmenSnapshot = await getDocs(collection(db, 'admin-data', 'root', 'employees', 'salesman', 'salesman'));
+        const salesmenList = salesmenSnapshot.docs.map(doc => ({
+          id: doc.id,
+          name: doc.data().name,
+          ...doc.data()
+        }));
+        setSalesmen(salesmenList);
+      } catch (error) {
+        console.error('Error fetching salesmen:', error);
+        setSalesmen([]);
+      }
+    };
+    fetchSalesmen();
+  }, []);
+
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
   
   // Set default date to yesterday
@@ -426,6 +464,7 @@ const Dashboard = () => {
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Number</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">First Visit Date</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Product</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Salesman</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Follow Ups</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Status</th>
                   </tr>
@@ -453,6 +492,9 @@ const Dashboard = () => {
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
                           {firstProduct}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                          {apt.salesmanName || 'Unassigned'}
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
                           <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs font-semibold">

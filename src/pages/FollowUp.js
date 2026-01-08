@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collectionGroup, getDocs, addDoc, collection } from 'firebase/firestore';
+import { collectionGroup, getDocs, addDoc, collection, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useApp } from '../context/AppContext';
 import { ClipboardList, Calendar, User, MessageCircle, ChevronDown, ChevronUp, Filter, CheckCircle, XCircle, Clock, Download } from 'lucide-react';
@@ -21,6 +21,7 @@ const FollowUp = () => {
     const [appointments, setAppointments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [expandedRow, setExpandedRow] = useState(null);
+    const [salesmen, setSalesmen] = useState([]);
 
     // Filter States
     const [selectedEmployee, setSelectedEmployee] = useState('all');
@@ -29,6 +30,13 @@ const FollowUp = () => {
     // Search bar state
     const [searchTerm, setSearchTerm] = useState("");
 
+    // Get salesman name from ID
+    const getSalesmanNameById = (salesmanId) => {
+        if (!salesmanId) return 'Unassigned';
+        const salesman = salesmen.find(s => s.id === salesmanId);
+        return salesman ? salesman.name : 'Unknown';
+    };
+
     useEffect(() => {
         let isMounted = true;
 
@@ -36,10 +44,16 @@ const FollowUp = () => {
             try {
                 // Use collectionGroup to fetch 'appointments' from any depth
                 const querySnapshot = await getDocs(collectionGroup(db, 'appointments'));
-                const fetchedData = querySnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                }));
+                const fetchedData = querySnapshot.docs.map((doc) => {
+                    const data = doc.data();
+                    const salesmanName = getSalesmanNameById(data.assignedTo);
+                    
+                    return {
+                        id: doc.id,
+                        ...data,
+                        salesmanName
+                    };
+                });
 
                 // Sort by number of follow-ups (descending)
                 const sortedData = fetchedData.sort((a, b) => {
@@ -65,6 +79,25 @@ const FollowUp = () => {
         return () => {
             isMounted = false;
         };
+    }, [salesmen]);
+
+    // Fetch salesmen from Firestore
+    useEffect(() => {
+        const fetchSalesmen = async () => {
+            try {
+                const salesmenSnapshot = await getDocs(collection(db, 'admin-data', 'root', 'employees', 'salesman', 'salesman'));
+                const salesmenList = salesmenSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    name: doc.data().name,
+                    ...doc.data()
+                }));
+                setSalesmen(salesmenList);
+            } catch (error) {
+                console.error('Error fetching salesmen:', error);
+                setSalesmen([]);
+            }
+        };
+        fetchSalesmen();
     }, []);
 
     const toggleExpand = (id) => {
@@ -76,6 +109,21 @@ const FollowUp = () => {
         if (!empId) return 'Unknown';
         const emp = employees.find(e => e.id === empId || e.empId === empId);
         return emp ? emp.name : empId;
+    };
+
+    // Helper to get salesman name from salesman ID
+    const getSalesmanName = async (salesmanId) => {
+        if (!salesmanId) return 'Unassigned';
+        try {
+            const salesmanDoc = await getDoc(doc(db, 'salesman', salesmanId));
+            if (salesmanDoc.exists()) {
+                return salesmanDoc.data().name || 'Unknown';
+            }
+            return 'Unknown';
+        } catch (error) {
+            console.error('Error fetching salesman:', error);
+            return 'Unknown';
+        }
     };
 
     // Helper to format date for comparison (YYYY-MM-DD -> DD/MM/YYYY)
@@ -145,6 +193,7 @@ const FollowUp = () => {
                 'Customer Name': apt.customerName || 'N/A',
                 'Last Interaction': displayDate,
                 'Employee Name': getEmployeeName(apt.employeeId),
+                'Salesman Name': apt.salesmanName || 'Unassigned',
                 'Status': displayStatus,
                 'Follow-ups Count': apt.followUps?.length || 0,
                 'Follow-up History': followUpHistory,
@@ -161,6 +210,7 @@ const FollowUp = () => {
             { wch: 20 }, // Customer Name
             { wch: 15 }, // Last Interaction
             { wch: 20 }, // Employee Name
+            { wch: 20 }, // Salesman Name
             { wch: 15 }, // Status
             { wch: 15 }, // Follow-ups Count
             { wch: 50 }, // Follow-up History
@@ -365,6 +415,7 @@ const FollowUp = () => {
                                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Number</th>
                                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">First Visit Date</th>
                                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Product 1</th>
+                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Salesman</th>
                                 <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Follow Ups</th>
                                 <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
                                 <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
@@ -436,6 +487,9 @@ const FollowUp = () => {
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="text-sm text-gray-900 dark:text-white">{product1}</div>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <div className="text-sm text-gray-900 dark:text-white">{apt.salesmanName || 'Unassigned'}</div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-center">
                                                 <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${(apt.followUps?.length || 0) > 0
