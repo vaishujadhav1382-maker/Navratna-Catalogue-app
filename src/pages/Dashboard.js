@@ -11,6 +11,8 @@ const Dashboard = () => {
   const [appointments, setAppointments] = useState([]);
   const [appointmentsLoading, setAppointmentsLoading] = useState(true);
   const [salesmen, setSalesmen] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   // Get salesman name from ID
   const getSalesmanNameById = (salesmanId) => {
@@ -80,6 +82,11 @@ const Dashboard = () => {
   const [offersLoading, setOffersLoading] = useState(true);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [allOfferImages, setAllOfferImages] = useState([]);
+
+  // Reset pagination when date changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedDate]);
 
   // Fetch offers when selectedMonth changes
   useEffect(() => {
@@ -187,6 +194,68 @@ const Dashboard = () => {
     const [day, month, year] = createdDate.split('/');
     if (!day || !month || !year) return '';
     return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  };
+
+  // Helper function to get purchase date from appointment
+  const getPurchaseDate = (apt) => {
+    if (!apt) return 'N/A';
+    
+    // Check if any product has a purchase date
+    if (apt.products && Array.isArray(apt.products)) {
+      for (let product of apt.products) {
+        if (product.purchaseDate) {
+          return product.purchaseDate;
+        }
+      }
+    }
+    
+    // Check if any follow-up mentions purchase
+    if (apt.followUps && Array.isArray(apt.followUps)) {
+      const lastFollowUp = apt.followUps[apt.followUps.length - 1];
+      if (lastFollowUp && lastFollowUp.status && (lastFollowUp.status.toLowerCase().includes('purchased') || lastFollowUp.status.toLowerCase().includes('purchase'))) {
+        return lastFollowUp.date || 'N/A';
+      }
+    }
+    
+    // Check appointment status
+    if (apt.status && (apt.status.toLowerCase().includes('purchased') || apt.status.toLowerCase().includes('complete'))) {
+      // Find the date of the last follow-up or creation date
+      if (apt.followUps && apt.followUps.length > 0) {
+        return apt.followUps[apt.followUps.length - 1].date || 'N/A';
+      }
+    }
+    
+    return 'N/A';
+  };
+
+  // Helper function to get cancelled date from appointment
+  const getCancelledDate = (apt) => {
+    if (!apt) return 'N/A';
+    
+    // Check if any product is cancelled
+    if (apt.products && Array.isArray(apt.products)) {
+      for (let product of apt.products) {
+        if (product.status && product.status.toLowerCase().includes('cancel')) {
+          return product.cancelledDate || 'N/A';
+        }
+      }
+    }
+    
+    // Check if appointment is cancelled
+    if (apt.status && apt.status.toLowerCase().includes('cancel')) {
+      // Find the date of cancellation from follow-ups
+      if (apt.followUps && apt.followUps.length > 0) {
+        for (let i = apt.followUps.length - 1; i >= 0; i--) {
+          const fu = apt.followUps[i];
+          if (fu.status && fu.status.toLowerCase().includes('cancel')) {
+            return fu.date || 'N/A';
+          }
+        }
+        return apt.followUps[apt.followUps.length - 1].date || 'N/A';
+      }
+    }
+    
+    return 'N/A';
   };
 
   // Filter followups for selected date
@@ -456,67 +525,142 @@ const Dashboard = () => {
           </div>
           
           {followupsForSelectedDate.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Number</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">First Visit Date</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Product</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Salesman</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Follow Ups</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {followupsForSelectedDate.map((apt) => {
-                    const firstProduct = apt.products && apt.products.length > 0 
-                      ? (apt.products[0].name || apt.products[0].productName || 'N/A')
-                      : 'N/A';
-                    
-                    const followUpCount = apt.followUps && Array.isArray(apt.followUps) 
-                      ? apt.followUps.length 
-                      : 0;
+            <div className="flex flex-col">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Sr</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Name</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Number</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">First Visit Date</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Product</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Salesman</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Follow Ups</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Date</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {followupsForSelectedDate.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map((apt, index) => {
+                      const firstProduct = apt.products && apt.products.length > 0 
+                        ? (apt.products[0].name || apt.products[0].productName || 'N/A')
+                        : 'N/A';
+                      
+                      const followUpCount = apt.followUps && Array.isArray(apt.followUps) 
+                        ? apt.followUps.length 
+                        : 0;
 
-                    return (
-                      <tr key={apt.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                        <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
-                          {apt.customerName || 'Unknown'}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                          {apt.customerMobile || 'N/A'}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                          {apt.createdDate || 'N/A'}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                          {firstProduct}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                          {apt.salesmanName || 'Unassigned'}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs font-semibold">
-                            {followUpCount}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-sm">
-                          <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${
-                            apt.status === 'Purchased' 
-                              ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' 
-                              : apt.status === 'Pending'
-                              ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
-                              : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
-                          }`}>
-                            {apt.status || 'Unknown'}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                      const purchaseDate = getPurchaseDate(apt);
+                      const cancelledDate = getCancelledDate(apt);
+                      const srNumber = (currentPage - 1) * ITEMS_PER_PAGE + index + 1;
+
+                      // Determine which date to show based on status
+                      let displayDate = 'N/A';
+                      let dateColor = 'text-gray-400';
+
+                      const statusLower = (apt.status || '').toLowerCase();
+                      if (statusLower === 'purchased' && purchaseDate !== 'N/A') {
+                        displayDate = purchaseDate;
+                        dateColor = 'font-semibold text-green-600 dark:text-green-400';
+                      } else if ((statusLower.includes('cancel') || statusLower.includes('cancelled')) && cancelledDate !== 'N/A') {
+                        displayDate = cancelledDate;
+                        dateColor = 'font-semibold text-red-600 dark:text-red-400';
+                      }
+
+                      return (
+                        <tr key={apt.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                          <td className="px-6 py-4 text-sm font-semibold text-gray-900 dark:text-white">
+                            {srNumber}
+                          </td>
+                          <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
+                            {apt.customerName || 'Unknown'}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                            {apt.customerMobile || 'N/A'}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                            {apt.createdDate || 'N/A'}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                            {firstProduct}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                            {apt.salesmanName || 'Unassigned'}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs font-semibold">
+                              {followUpCount}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                            <span className={dateColor}>
+                              {displayDate}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-sm">
+                            <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${
+                              apt.status === 'Purchased' 
+                                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' 
+                                : apt.status === 'Pending'
+                                ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+                                : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                            }`}>
+                              {apt.status || 'Unknown'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination Controls */}
+              <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30">
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  Showing <span className="font-semibold">{(currentPage - 1) * ITEMS_PER_PAGE + 1}</span> to <span className="font-semibold">{Math.min(currentPage * ITEMS_PER_PAGE, followupsForSelectedDate.length)}</span> of <span className="font-semibold">{followupsForSelectedDate.length}</span> records
+                </div>
+                <div className="flex items-center gap-2">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    className="p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </motion.button>
+                  
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.ceil(followupsForSelectedDate.length / ITEMS_PER_PAGE) }, (_, i) => i + 1).map(page => (
+                      <motion.button
+                        key={page}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => setCurrentPage(page)}
+                        className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                          currentPage === page
+                            ? 'bg-primary text-white'
+                            : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        {page}
+                      </motion.button>
+                    ))}
+                  </div>
+
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setCurrentPage(prev => Math.min(Math.ceil(followupsForSelectedDate.length / ITEMS_PER_PAGE), prev + 1))}
+                    disabled={currentPage === Math.ceil(followupsForSelectedDate.length / ITEMS_PER_PAGE)}
+                    className="p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </motion.button>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="flex items-center justify-center h-48">
