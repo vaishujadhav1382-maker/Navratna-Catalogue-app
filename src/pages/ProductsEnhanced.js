@@ -701,7 +701,7 @@ const ProductsEnhanced = () => {
     return all.sort();
   }, [formData.category, subcategories, customSubcategories, editingProduct, deletedSubcategories]);
 
-  if (productsLoading && products.length === 0) {
+  if (productsLoading && products.length === 0) {     
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">

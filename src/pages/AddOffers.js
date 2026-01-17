@@ -10,7 +10,7 @@ import {
     X,
     Save,
     Upload,
-    Pencil,
+    Pencil,   
     ChevronLeft,
     ChevronRight,
     ImageIcon
