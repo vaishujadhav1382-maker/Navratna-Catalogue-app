@@ -246,7 +246,7 @@ const Offers = () => {
         setToasts(prev => [...prev, { id, message, type, duration }]);
     };
 
-    const removeToast = (id) => {
+    const removeToast = (id) => { 
         setToasts(prev => prev.filter(toast => toast.id !== id));
     };
 
