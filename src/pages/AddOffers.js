@@ -105,7 +105,7 @@ const OfferCard = ({ offer, monthId, onToggleStatus, onDelete, onEdit }) => {
                 </div>
             )}
 
-            {/* Focus Product Images Carousel */}
+            {/* Focus Product Images Carousel */}  
             {focusProductImages.length > 0 && (
                 <div className="mb-3">
                     <h4 className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Focus Product</h4>
