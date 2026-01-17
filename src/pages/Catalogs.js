@@ -7,8 +7,7 @@ import {
     Trash2,
     X,
     Upload,
-    Download,
-    Calendar
+    Download
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ToastContainer } from '../components/Toast';

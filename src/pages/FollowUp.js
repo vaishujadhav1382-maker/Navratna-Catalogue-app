@@ -502,20 +502,20 @@ const FollowUp = () => {
                                 }
                                 // If filtering by date, show last interaction
                                 if (dateFilterStart || dateFilterEnd) {
-                                    if (apt.followUps && apt.followUps.length > 0) {
-                                        const lastFollowUp = apt.followUps[apt.followUps.length - 1];
-                                        if (lastFollowUp && lastFollowUp.date) {
-                                            displayDate = lastFollowUp.date;
-                                        }
-                                    }
+                                    // if (apt.followUps && apt.followUps.length > 0) {
+                                    //     const lastFollowUp = apt.followUps[apt.followUps.length - 1];
+                                    //     if (lastFollowUp && lastFollowUp.date) {
+                                    //         displayDate = lastFollowUp.date;
+                                    //     }
+                                    // }
                                 } else {
                                     // No filter: Show last interaction date (latest follow-up)
-                                    if (apt.followUps && apt.followUps.length > 0) {
-                                        const lastFollowUp = apt.followUps[apt.followUps.length - 1];
-                                        // if (lastFollowUp && lastFollowUp.date) {
-                                        //     displayDate = lastFollowUp.date;
-                                        // }
-                                    }
+                                    // if (apt.followUps && apt.followUps.length > 0) {
+                                    //     const lastFollowUp = apt.followUps[apt.followUps.length - 1];
+                                    //     // if (lastFollowUp && lastFollowUp.date) {
+                                    //     //     displayDate = lastFollowUp.date;
+                                    //     // }
+                                    // }
                                 }
                                 // Product 1 name
                                 const product1 = apt.products && apt.products[0] ? apt.products[0].name : "-";
