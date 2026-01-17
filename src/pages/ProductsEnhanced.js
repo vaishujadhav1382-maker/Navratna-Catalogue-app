@@ -17,6 +17,10 @@ const ProductsEnhanced = () => {
   // Custom dropdown open states
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
   const [isSubcategoryDropdownOpen, setIsSubcategoryDropdownOpen] = useState(false);
+  
+  // Form dropdown states
+  const [isFormCategoryDropdownOpen, setIsFormCategoryDropdownOpen] = useState(false);
+  const [isFormSubcategoryDropdownOpen, setIsFormSubcategoryDropdownOpen] = useState(false);
 
   // Extra options added from filter plus buttons (client-side only)
   const [customCompanies, setCustomCompanies] = useState([]); // Deprecated - keeping for backwards compatibility
@@ -78,9 +82,10 @@ const ProductsEnhanced = () => {
         products
           .map(p => p.category)
           .filter(Boolean)
+          .filter(c => c !== 'Unknown') // Exclude Unknown
       )
     );
-    const base = (categories || []).filter(c => !deletedCategories.includes(c));
+    const base = (categories || []).filter(c => !deletedCategories.includes(c) && c !== 'Unknown');
     const customGeneral = customCategories['General'] || [];
     const all = Array.from(new Set([...base, ...fromProducts, ...customGeneral]));
     return all.sort();
@@ -93,11 +98,12 @@ const ProductsEnhanced = () => {
           .filter(p => !selectedCategory || p.category === selectedCategory)
           .map(p => p.subcategory)
           .filter(Boolean)
+          .filter(s => s !== 'Unknown') // Exclude Unknown
       )
     );
     const categoryName = selectedCategory || '';
     const key = `${categoryName}`;
-    const base = categoryName ? (subcategories[categoryName] || []).filter(s => !deletedSubcategories.includes(s)) : [];
+    const base = categoryName ? (subcategories[categoryName] || []).filter(s => !deletedSubcategories.includes(s) && s !== 'Unknown') : [];
     const customForCategory = customSubcategories[key] || [];
     const customGeneral = customSubcategories['General'] || [];
     // Get all custom subcategories for any category if no specific category selected
@@ -368,6 +374,53 @@ const ProductsEnhanced = () => {
       subcategory: '',
     }));
   };
+  
+  // Form category handlers
+  const handleSelectCategoryFromForm = (category) => {
+    setFormData({ ...formData, category, subcategory: '' });
+    setIsFormCategoryDropdownOpen(false);
+  };
+  
+  const handleDeleteCategoryFromForm = async (category) => {
+    if (!category) return;
+    const ok = window.confirm(`Permanently delete category "${category}"? This will remove it from filters and forms.`);
+    if (!ok) return;
+    
+    try {
+      // Check if it's a custom category
+      const isCustom = Object.values(customCategories).some(items => items.includes(category));
+      
+      if (isCustom) {
+        // Remove from custom categories
+        setCustomCategories(prev => {
+          const updated = { ...prev };
+          Object.keys(updated).forEach(key => {
+            updated[key] = updated[key].filter(c => c !== category);
+            if (updated[key].length === 0) delete updated[key];
+          });
+          return updated;
+        });
+      } else {
+        // Mark as deleted (it's from products)
+        setDeletedCategories(prev => [...prev, category]);
+      }
+      
+      // Clear form if deleted category was selected
+      if (formData.category === category) {
+        setFormData({ ...formData, category: '', subcategory: '' });
+      }
+      
+      // Also clear from filter if selected
+      if (selectedCategory === category) {
+        setSelectedCategory('');
+        setSelectedSubcategory('');
+      }
+    } catch (error) {
+      alert('Failed to delete category: ' + (error.message || 'Unknown error'));
+    } finally {
+      setIsFormCategoryDropdownOpen(false);
+    }
+  };
 
   const handleFormAddSubcategory = () => {
     const name = window.prompt(`Enter subcategory name:`);
@@ -382,6 +435,52 @@ const ProductsEnhanced = () => {
       ...prev,
       subcategory: name,
     }));
+  };
+  
+  // Form subcategory handlers
+  const handleSelectSubcategoryFromForm = (subcategory) => {
+    setFormData({ ...formData, subcategory });
+    setIsFormSubcategoryDropdownOpen(false);
+  };
+  
+  const handleDeleteSubcategoryFromForm = async (subcategory) => {
+    if (!subcategory) return;
+    const ok = window.confirm(`Permanently delete subcategory "${subcategory}"? This will remove it from filters and forms.`);
+    if (!ok) return;
+    
+    try {
+      // Check if it's a custom subcategory
+      const isCustom = Object.values(customSubcategories).some(items => items.includes(subcategory));
+      
+      if (isCustom) {
+        // Remove from custom subcategories
+        setCustomSubcategories(prev => {
+          const updated = {};
+          Object.keys(prev).forEach(key => {
+            updated[key] = prev[key].filter(s => s !== subcategory);
+            if (updated[key].length === 0) delete updated[key];
+          });
+          return updated;
+        });
+      } else {
+        // Mark as deleted (it's from products)
+        setDeletedSubcategories(prev => [...prev, subcategory]);
+      }
+      
+      // Clear form if deleted subcategory was selected
+      if (formData.subcategory === subcategory) {
+        setFormData({ ...formData, subcategory: '' });
+      }
+      
+      // Also clear from filter if selected
+      if (selectedSubcategory === subcategory) {
+        setSelectedSubcategory('');
+      }
+    } catch (error) {
+      alert('Failed to delete subcategory: ' + (error.message || 'Unknown error'));
+    } finally {
+      setIsFormSubcategoryDropdownOpen(false);
+    }
   };
 
   // Product modal handlers
@@ -556,34 +655,51 @@ const ProductsEnhanced = () => {
   XLSX.writeFile(wb, 'products-export.xlsx');
   };
 
-  // Get available categories/subcategories for the form (respect custom additions)
+  // Get available categories/subcategories for the form (respect custom additions and deletions)
   const formAvailableCategories = useMemo(() => {
-    const base = categories || [];
+    const base = (categories || []).filter(c => !deletedCategories.includes(c) && c !== 'Unknown');
     const customGeneral = customCategories['General'] || [];
     let all = Array.from(new Set([...base, ...customGeneral]));
     
-    // Always include the editing product's category if it exists
-    if (editingProduct && editingProduct.category && !all.includes(editingProduct.category)) {
+    // Always include the editing product's category if it exists (except Unknown)
+    if (editingProduct && editingProduct.category && editingProduct.category !== 'Unknown' && !all.includes(editingProduct.category)) {
       all = [...all, editingProduct.category];
     }
     
-    return all;
-  }, [categories, customCategories, editingProduct]);
+    return all.sort();
+  }, [categories, customCategories, editingProduct, deletedCategories]);
 
   const formAvailableSubcategories = useMemo(() => {
-    const base = formData.category ? (subcategories[formData.category] || []) : [];
+    // If no category selected, show all subcategories from all categories
+    if (!formData.category) {
+      const allSubs = new Set();
+      Object.entries(subcategories).forEach(([cat, subsArray]) => {
+        subsArray.forEach(sub => {
+          if (!deletedSubcategories.includes(sub) && sub !== 'Unknown') {
+            allSubs.add(sub);
+          }
+        });
+      });
+      Object.values(customSubcategories).forEach(subsArray => {
+        subsArray.forEach(sub => allSubs.add(sub));
+      });
+      return Array.from(allSubs).sort();
+    }
+    
+    // If category is selected, show only subcategories for that category
+    const base = (subcategories[formData.category] || []).filter(s => !deletedSubcategories.includes(s) && s !== 'Unknown');
     const key = `${formData.category}`;
     const customForCategory = customSubcategories[key] || [];
     const customGeneral = customSubcategories['General'] || [];
     let all = Array.from(new Set([...base, ...customForCategory, ...customGeneral]));
     
-    // Always include the editing product's subcategory if it exists
-    if (editingProduct && editingProduct.subcategory && !all.includes(editingProduct.subcategory)) {
+    // Always include the editing product's subcategory if it exists (except Unknown)
+    if (editingProduct && editingProduct.subcategory && editingProduct.subcategory !== 'Unknown' && !all.includes(editingProduct.subcategory)) {
       all = [...all, editingProduct.subcategory];
     }
     
-    return all;
-  }, [formData.category, subcategories, customSubcategories, editingProduct]);
+    return all.sort();
+  }, [formData.category, subcategories, customSubcategories, editingProduct, deletedSubcategories]);
 
   if (productsLoading && products.length === 0) {
     return (
@@ -1131,16 +1247,59 @@ const ProductsEnhanced = () => {
                             <Plus className="w-3 h-3" />
                           </button>
                         </div>
-                        <select
-                          value={formData.category}
-                          onChange={(e) => setFormData({ ...formData, category: e.target.value, subcategory: '' })}
-                          className="input-field"
-                        >
-                          <option value="">Select Category</option>
-                          {formAvailableCategories.map(cat => (
-                            <option key={cat} value={cat}>{cat}</option>
-                          ))}
-                        </select>
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setIsFormCategoryDropdownOpen(prev => !prev)}
+                            className="input-field w-full flex items-center justify-between text-left"
+                          >
+                            <span className={!formData.category ? 'text-gray-400' : ''}>
+                              {formData.category || 'Select Category'}
+                            </span>
+                            <span className="ml-2 text-gray-400">▾</span>
+                          </button>
+                          {isFormCategoryDropdownOpen && (
+                            <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-auto">
+                              {formAvailableCategories.length === 0 ? (
+                                <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">No categories available</div>
+                              ) : (
+                                <>
+                                  <div
+                                    className="px-3 py-2 text-sm cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-100"
+                                    onClick={() => handleSelectCategoryFromForm('')}
+                                  >
+                                    Select Category
+                                  </div>
+                                  {formAvailableCategories.map(cat => (
+                                    <div
+                                      key={cat}
+                                      className="flex items-center justify-between px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 group"
+                                    >
+                                      <button
+                                        type="button"
+                                        className="flex-1 text-left text-gray-800 dark:text-gray-100"
+                                        onClick={() => handleSelectCategoryFromForm(cat)}
+                                      >
+                                        {cat}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDeleteCategoryFromForm(cat);
+                                        }}
+                                        className="ml-2 p-1 rounded-full text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        title="Delete category"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       {/* Subcategory */}
@@ -1158,16 +1317,59 @@ const ProductsEnhanced = () => {
                             <Plus className="w-3 h-3" />
                           </button>
                         </div>
-                        <select
-                          value={formData.subcategory}
-                          onChange={(e) => setFormData({ ...formData, subcategory: e.target.value })}
-                          className="input-field"
-                        >
-                          <option value="">Select Subcategory</option>
-                          {formAvailableSubcategories.map(sub => (
-                            <option key={sub} value={sub}>{sub}</option>
-                          ))}
-                        </select>
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setIsFormSubcategoryDropdownOpen(prev => !prev)}
+                            className="input-field w-full flex items-center justify-between text-left"
+                          >
+                            <span className={!formData.subcategory ? 'text-gray-400' : ''}>
+                              {formData.subcategory || 'Select Subcategory'}
+                            </span>
+                            <span className="ml-2 text-gray-400">▾</span>
+                          </button>
+                          {isFormSubcategoryDropdownOpen && (
+                            <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-auto">
+                              {formAvailableSubcategories.length === 0 ? (
+                                <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">No subcategories available</div>
+                              ) : (
+                                <>
+                                  <div
+                                    className="px-3 py-2 text-sm cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-100"
+                                    onClick={() => handleSelectSubcategoryFromForm('')}
+                                  >
+                                    Select Subcategory
+                                  </div>
+                                  {formAvailableSubcategories.map(sub => (
+                                    <div
+                                      key={sub}
+                                      className="flex items-center justify-between px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 group"
+                                    >
+                                      <button
+                                        type="button"
+                                        className="flex-1 text-left text-gray-800 dark:text-gray-100"
+                                        onClick={() => handleSelectSubcategoryFromForm(sub)}
+                                      >
+                                        {sub}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDeleteSubcategoryFromForm(sub);
+                                        }}
+                                        className="ml-2 p-1 rounded-full text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        title="Delete subcategory"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       {/* Product Name */}

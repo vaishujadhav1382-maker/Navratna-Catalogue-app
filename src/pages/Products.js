@@ -849,8 +849,14 @@ const Products = () => {
                     className="input-field"
                     required
                   >
-                    <option value="">Select Category</option>
-                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                    {categories.length === 0 ? (
+                      <option value="">No categories available</option>
+                    ) : (
+                      <>
+                        <option value="">Select Category</option>
+                        {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                      </>
+                    )}
                   </select>
                 </div>
               </div>
@@ -862,10 +868,20 @@ const Products = () => {
                   onChange={(e) => setFormData({ ...formData, subcategory: e.target.value })}
                   className="input-field"
                   required
-                  disabled={!formData.category}
                 >
-                  <option value="">Select Subcategory</option>
-                  {formData.category && subcategories[formData.category]?.map(s => <option key={s} value={s}>{s}</option>)}
+                  {!formData.category ? (
+                    <>
+                      <option value="">Select Subcategory</option>
+                      {Object.values(subcategories).flat().filter((v, i, a) => a.indexOf(v) === i).map(s => <option key={s} value={s}>{s}</option>)}
+                    </>
+                  ) : !subcategories[formData.category] || subcategories[formData.category].length === 0 ? (
+                    <option value="">No subcategories available</option>
+                  ) : (
+                    <>
+                      <option value="">Select Subcategory</option>
+                      {formData.category && subcategories[formData.category]?.map(s => <option key={s} value={s}>{s}</option>)}
+                    </>
+                  )}
                 </select>
               </div>
 

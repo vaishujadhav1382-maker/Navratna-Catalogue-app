@@ -196,17 +196,98 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  // Companies, Categories, Subcategories (matching mobile app structure)
+  // Companies, Categories, Subcategories (extracted from existing products)
   const [companies] = useState(['LG', 'Samsung', 'Whirlpool', 'Godrej', 'Haier', 'Voltas', 'Blue Star', 'Carrier']);
-  const [categories] = useState(['TV', 'Refrigerator', 'Washing Machine', 'Air Conditioner', 'Microwave', 'Dishwasher']);
-  const [subcategories] = useState({
-    'Air Conditioner': ['Standard', 'Premium', 'Inverter', 'Split AC', 'Window AC'],
-    'Refrigerator': ['Standard', 'Premium', 'Single Door', 'Double Door', 'Side by Side', 'French Door'],
-    'Washing Machine': ['Standard', 'Premium', 'Front Load', 'Top Load', 'Semi-Automatic'],
-    'TV': ['Standard', 'Premium', 'LED', 'OLED', 'QLED', 'Smart TV'],
-    'Microwave': ['Standard', 'Premium', 'Solo', 'Grill', 'Convection'],
-    'Dishwasher': ['Standard', 'Premium', 'Built-in', 'Portable'],
-  });
+  const [categories, setCategories] = useState([]);
+  const [subcategories, setSubcategories] = useState({});
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [subcategoriesLoading, setSubcategoriesLoading] = useState(false);
+
+  // Extract categories and subcategories from existing products
+  const extractCategoriesFromProducts = (productsData) => {
+    const uniqueCategories = new Set();
+    const subcatsMap = {};
+    
+    productsData.forEach(product => {
+      if (product.category) {
+        uniqueCategories.add(product.category);
+        
+        // Initialize subcategories array for this category if not exists
+        if (!subcatsMap[product.category]) {
+          subcatsMap[product.category] = new Set();
+        }
+        
+        // Add subcategory if it exists
+        if (product.subcategory) {
+          subcatsMap[product.category].add(product.subcategory);
+        }
+      }
+    });
+    
+    // Convert Sets to sorted arrays
+    const sortedCategories = Array.from(uniqueCategories).sort();
+    const sortedSubcategories = {};
+    Object.entries(subcatsMap).forEach(([cat, subcats]) => {
+      sortedSubcategories[cat] = Array.from(subcats).sort();
+    });
+    
+    setCategories(sortedCategories);
+    setSubcategories(sortedSubcategories);
+  };
+
+  // Fetch categories from existing products
+  const fetchCategories = async () => {
+    try {
+      setCategoriesLoading(true);
+      // Categories are extracted from products
+      extractCategoriesFromProducts(products);
+    } catch (err) {
+      console.error('Error extracting categories:', err);
+    } finally {
+      setCategoriesLoading(false);
+    }
+  };
+
+  // Fetch subcategories for a specific category from existing products
+  const fetchSubcategories = async (category) => {
+    try {
+      setSubcategoriesLoading(true);
+      // Subcategories are already extracted, just ensure they exist
+      if (!subcategories[category]) {
+        setSubcategories(prev => ({
+          ...prev,
+          [category]: []
+        }));
+      }
+    } catch (err) {
+      console.error('Error fetching subcategories:', err);
+    } finally {
+      setSubcategoriesLoading(false);
+    }
+  };
+
+  // Fetch all subcategories from existing products
+  const fetchAllSubcategories = async () => {
+    try {
+      setSubcategoriesLoading(true);
+      // Subcategories are extracted from products
+      extractCategoriesFromProducts(products);
+    } catch (err) {
+      console.error('Error fetching all subcategories:', err);
+    } finally {
+      setSubcategoriesLoading(false);
+    }
+  };
+
+  // Extract categories and subcategories whenever products change
+  useEffect(() => {
+    if (products.length > 0) {
+      extractCategoriesFromProducts(products);
+    } else {
+      setCategories([]);
+      setSubcategories({});
+    }
+  }, [products]);
 
   // Dark mode effect
   useEffect(() => {
