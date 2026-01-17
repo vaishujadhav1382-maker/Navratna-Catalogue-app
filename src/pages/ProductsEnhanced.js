@@ -1,11 +1,11 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Upload, TrendingDown, Award, DollarSign, Package as PackageIcon, X, Edit2, Trash2, RefreshCw, Download } from 'lucide-react';
+import { Plus, Upload, Award, Package as PackageIcon, X, Edit2, Trash2, RefreshCw, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 const ProductsEnhanced = () => {
-  const { products, productsLoading, fetchProducts, addProduct, updateProduct, deleteProduct, deleteAllProducts, importProductsFromExcel, companies, categories, subcategories, deleteCompanyHierarchy, deleteCategoryHierarchy, deleteSubcategoryHierarchy } = useApp();
+  const { products, productsLoading, fetchProducts, addProduct, updateProduct, deleteProduct, importProductsFromExcel, categories, subcategories } = useApp();
   
   // Filter states
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -23,12 +23,6 @@ const ProductsEnhanced = () => {
   const [isFormSubcategoryDropdownOpen, setIsFormSubcategoryDropdownOpen] = useState(false);
 
   // Extra options added from filter plus buttons (client-side only)
-  const [customCompanies, setCustomCompanies] = useState([]); // Deprecated - keeping for backwards compatibility
-  // Initialize deleted items from localStorage
-  const [deletedCompanies, setDeletedCompanies] = useState(() => {
-    const saved = localStorage.getItem('deletedCompanies');
-    return saved ? JSON.parse(saved) : [];
-  }); // Deprecated - keeping for backwards compatibility
   const [customCategories, setCustomCategories] = useState({}); // { category: string[] }
   const [deletedCategories, setDeletedCategories] = useState(() => {
     const saved = localStorage.getItem('deletedCategories');
@@ -203,34 +197,11 @@ const ProductsEnhanced = () => {
     return filteredProducts.slice(start, start + pageSize);
   }, [filteredProducts, currentPage]);
 
-  // Get recommended products (based on price difference and incentive)
-  const recommendedProducts = useMemo(() => {
-    return [...products]
-      .sort((a, b) => {
-        // Sort by price difference (higher difference = better deal) and incentive
-        const priceDiscountA = ((a.price || 0) - (a.minPrice || 0)) / (a.price || 1) * 100;
-        const priceDiscountB = ((b.price || 0) - (b.minPrice || 0)) / (b.price || 1) * 100;
-        const scoreA = priceDiscountA * 0.7 + (a.incentive || 0) * 0.3;
-        const scoreB = priceDiscountB * 0.7 + (b.incentive || 0) * 0.3;
-        return scoreB - scoreA;
-      })
-      .slice(0, 5);
-  }, [products]);
-
   // Average price difference (discount %) for valid products
   const validDiscountProducts = useMemo(
     () => filteredProducts.filter(p => (p.price || 0) > 0 && (p.minPrice || 0) >= 0 && (p.minPrice || 0) <= (p.price || 0)),
     [filteredProducts]
   );
-
-  const avgPriceDifference = validDiscountProducts.length
-    ? Math.round(
-        validDiscountProducts.reduce(
-          (sum, p) => sum + (((p.price || 0) - (p.minPrice || 0)) / (p.price || 1) * 100),
-          0
-        ) / validDiscountProducts.length
-      )
-    : 0;
 
   // Reset dependent filters when parent changes
   const handleCategoryChange = (category) => {
