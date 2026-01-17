@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { collectionGroup, getDocs, collection, doc, getDoc, deleteDoc } from 'firebase/firestore';
+import React, { useState, useEffect, useCallback } from 'react';
+import { collectionGroup, getDocs, collection, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useApp } from '../context/AppContext';
 import { MessageCircle, ChevronDown, ChevronUp, Filter, XCircle, Clock, Download, Trash2 } from 'lucide-react';
@@ -34,11 +34,11 @@ const FollowUp = () => {
     const [deleteConfirm, setDeleteConfirm] = useState(null);
 
     // Get salesman name from ID
-    const getSalesmanNameById = (salesmanId) => {
+    const getSalesmanNameById = useCallback((salesmanId) => {
         if (!salesmanId) return 'Unassigned';
         const salesman = salesmen.find(s => s.id === salesmanId);
         return salesman ? salesman.name : 'Unknown';
-    };
+    }, [salesmen]);
 
     useEffect(() => {
         let isMounted = true;
@@ -512,9 +512,9 @@ const FollowUp = () => {
                                     // No filter: Show last interaction date (latest follow-up)
                                     if (apt.followUps && apt.followUps.length > 0) {
                                         const lastFollowUp = apt.followUps[apt.followUps.length - 1];
-                                        if (lastFollowUp && lastFollowUp.date) {
-                                            displayDate = lastFollowUp.date;
-                                        }
+                                        // if (lastFollowUp && lastFollowUp.date) {
+                                        //     displayDate = lastFollowUp.date;
+                                        // }
                                     }
                                 }
                                 // Product 1 name

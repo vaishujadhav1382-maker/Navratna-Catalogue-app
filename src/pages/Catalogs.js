@@ -13,69 +13,69 @@ import {
 import { useApp } from '../context/AppContext';
 import { ToastContainer } from '../components/Toast';
 
-const CatalogueCard = ({ catalog, onDelete, onView }) => {
-    return (
-        <motion.div
-            whileHover={{ scale: 1.02 }}
-            className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 flex flex-col"
-        >
-            {/* PDF Icon */}
-            <div className="mb-3">
-                <div className="relative h-40 bg-gradient-to-br from-red-100 to-red-200 dark:from-red-900/30 dark:to-red-800/30 rounded-lg overflow-hidden flex items-center justify-center">
-                    <FileText className="w-20 h-20 text-red-600 dark:text-red-400" />
-                </div>
-            </div>
-
-            {/* Catalogue Content */}
-            <div className="space-y-2 flex-1">
-                <h3 className="font-semibold text-gray-900 dark:text-white line-clamp-1" title={catalog.title}>
-                    {catalog.title}
-                </h3>
-                {catalog.description && (
-                    <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
-                        {catalog.description}
-                    </p>
-                )}
-                <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                    <Calendar className="w-3 h-3" />
-                    <span>{new Date(catalog.createdAt).toLocaleDateString()}</span>
-                </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex items-center justify-between pt-4 mt-2 border-t border-gray-200 dark:border-gray-700">
-                <span className="text-xs text-gray-500 dark:text-gray-400">
-                    {catalog.fileName}
-                </span>
-
-                <div className="flex items-center gap-1">
-                    <button
-                        onClick={() => onView(catalog)}
-                        className="p-1.5 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                        title="View PDF"
-                    >
-                        <Eye className="w-4 h-4" />
-                    </button>
-                    <a
-                        href={catalog.pdfUrl}
-                        download={catalog.fileName}
-                        className="p-1.5 text-green-500 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
-                        title="Download PDF"
-                    >
-                        <Download className="w-4 h-4" />
-                    </a>
-                    <button
-                        onClick={() => onDelete(catalog.id)}
-                        className="p-1.5 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                        title="Delete"
-                    >
-                        <Trash2 className="w-4 h-4" />
-                    </button>
-                </div>
-            </div>
-        </motion.div>
-    );
-};
+// const CatalogueCard = ({ catalog, onDelete, onView }) => {
+//     return (
+//         <motion.div
+//             whileHover={{ scale: 1.02 }}
+//             className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 flex flex-col"
+//         >
+//             {/* PDF Icon */}
+//             <div className="mb-3">
+//                 <div className="relative h-40 bg-gradient-to-br from-red-100 to-red-200 dark:from-red-900/30 dark:to-red-800/30 rounded-lg overflow-hidden flex items-center justify-center">
+//                     <FileText className="w-20 h-20 text-red-600 dark:text-red-400" />
+//                 </div>
+//             </div>
+//
+//             {/* Catalogue Content */}
+//             <div className="space-y-2 flex-1">
+//                 <h3 className="font-semibold text-gray-900 dark:text-white line-clamp-1" title={catalog.title}>
+//                     {catalog.title}
+//                 </h3>
+//                 {catalog.description && (
+//                     <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+//                         {catalog.description}
+//                     </p>
+//                 )}
+//                 <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+//                     <Calendar className="w-3 h-3" />
+//                     <span>{new Date(catalog.createdAt).toLocaleDateString()}</span>
+//                 </div>
+//             </div>
+//
+//             {/* Actions */}
+//             <div className="flex items-center justify-between pt-4 mt-2 border-t border-gray-200 dark:border-gray-700">
+//                 <span className="text-xs text-gray-500 dark:text-gray-400">
+//                     {catalog.fileName}
+//                 </span>
+//
+//                 <div className="flex items-center gap-1">
+//                     <button
+//                         onClick={() => onView(catalog)}
+//                         className="p-1.5 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+//                         title="View PDF"
+//                     >
+//                         <Eye className="w-4 h-4" />
+//                     </button>
+//                     <a
+//                         href={catalog.pdfUrl}
+//                         download={catalog.fileName}
+//                         className="p-1.5 text-green-500 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
+//                         title="Download PDF"
+//                     >
+//                         <Download className="w-4 h-4" />
+//                     </a>
+//                     <button
+//                         onClick={() => onDelete(catalog.id)}
+//                         className="p-1.5 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+//                         title="Delete"
+//                     >
+//                         <Trash2 className="w-4 h-4" />
+//                     </button>
+//                 </div>
+//             </div>
+//         </motion.div>
+//     );
+// };
 
 const Catalogues = () => {
     const {

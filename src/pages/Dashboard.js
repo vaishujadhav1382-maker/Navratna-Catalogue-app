@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Users, Package, DollarSign, Star, RefreshCw, Megaphone, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -14,11 +14,11 @@ const Dashboard = () => {
   const ITEMS_PER_PAGE = 10;
 
   // Get salesman name from ID
-  const getSalesmanNameById = (salesmanId) => {
+  const getSalesmanNameById = useCallback((salesmanId) => {
     if (!salesmanId) return 'Unassigned';
     const salesman = salesmen.find(s => s.id === salesmanId);
     return salesman ? salesman.name : 'Unknown';
-  };
+  }, [salesmen]);
 
     // Fetch appointments for follow-up stats
     useEffect(() => {
@@ -316,14 +316,14 @@ const Dashboard = () => {
 
   // --- Follow-up stats from appointments ---
   // Only consider appointments created in the selected month
-  const appointmentsThisMonth = appointments.filter(a => {
-    if (!a.createdDate) return false;
-    // createdDate may be in DD/MM/YYYY, convert to YYYY-MM
-    const [day, month, year] = a.createdDate.split('/');
-    if (!day || !month || !year) return false;
-    const aptMonth = `${year}-${month.padStart(2, '0')}`;
-    return aptMonth === selectedMonth;
-  });
+  // const appointmentsThisMonth = appointments.filter(a => {
+  //   if (!a.createdDate) return false;
+  //   // createdDate may be in DD/MM/YYYY, convert to YYYY-MM
+  //   const [day, month, year] = a.createdDate.split('/');
+  //   if (!day || !month || !year) return false;
+  //   const aptMonth = `${year}-${month.padStart(2, '0')}`;
+  //   return aptMonth === selectedMonth;
+  // });
   // Pending follow-ups: status is 'Pending' and no followUp is 'Complete' or 'Purchased'
   // const pendingFollowUps = appointmentsThisMonth.filter(a => {
   //   if ((a.status || '').toLowerCase() !== 'pending') return false;
