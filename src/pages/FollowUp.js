@@ -484,7 +484,7 @@ const FollowUp = () => {
                         <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                             {filteredAppointments.map((apt) => {
                                 // Determine the display date
-                                let displayDate = apt.createdDate || apt.date || 'N/A';
+                                // let displayDate = apt.createdDate || apt.date || 'N/A';
                                 // Determine display status
                                 let displayStatus = (apt.status || 'Pending');
                                 let statusColor = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400';
