@@ -219,7 +219,6 @@ const Offers = () => {
     const {
         offers,
         offersLoading,
-        offersError,
         addOffer,
         updateOffer,
         deleteOffer,
@@ -251,16 +250,11 @@ const Offers = () => {
         setToasts(prev => prev.filter(toast => toast.id !== id));
     };
 
-    // Fetch offers from backend
-    const handleRefreshOffers = async () => {
-        await fetchOffers();
-    };
-
     useEffect(() => {
         if (offers.length === 0) {
             fetchOffers();
         }
-    }, []);
+    }, [offers.length, fetchOffers]);
 
     // Handle Edit Click
     const handleEditClick = (monthId, offer) => {

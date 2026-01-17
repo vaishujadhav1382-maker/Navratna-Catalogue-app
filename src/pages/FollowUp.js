@@ -1,22 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { collectionGroup, getDocs, addDoc, collection, doc, getDoc, deleteDoc } from 'firebase/firestore';
+import { collectionGroup, getDocs, collection, doc, getDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useApp } from '../context/AppContext';
-import { ClipboardList, Calendar, User, MessageCircle, ChevronDown, ChevronUp, Filter, CheckCircle, XCircle, Clock, Download, Trash2 } from 'lucide-react';
+import { MessageCircle, ChevronDown, ChevronUp, Filter, XCircle, Clock, Download, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as XLSX from 'xlsx';
 
 const FollowUp = () => {
         // Add FollowUp to Firestore
-        const addFollowUpToFirestore = async (followUpData) => {
-            try {
-                const docRef = await addDoc(collection(db, 'appointments'), followUpData);
-                return docRef.id;
-            } catch (error) {
-                console.error('Error adding follow-up:', error);
-                return null;
-            }
-        };
+        // const addFollowUpToFirestore = async (followUpData) => {
+        //     try {
+        //         const docRef = await addDoc(collection(db, 'appointments'), followUpData);
+        //         return docRef.id;
+        //     } catch (error) {
+        //         console.error('Error adding follow-up:', error);
+        //         return null;
+        //     }
+        // };
     const { employees } = useApp();
     const [appointments, setAppointments] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -82,7 +82,7 @@ const FollowUp = () => {
         return () => {
             isMounted = false;
         };
-    }, [salesmen]);
+    }, [salesmen, getSalesmanNameById]);
 
     // Fetch salesmen from Firestore
     useEffect(() => {
@@ -115,19 +115,19 @@ const FollowUp = () => {
     };
 
     // Helper to get salesman name from salesman ID
-    const getSalesmanName = async (salesmanId) => {
-        if (!salesmanId) return 'Unassigned';
-        try {
-            const salesmanDoc = await getDoc(doc(db, 'salesman', salesmanId));
-            if (salesmanDoc.exists()) {
-                return salesmanDoc.data().name || 'Unknown';
-            }
-            return 'Unknown';
-        } catch (error) {
-            console.error('Error fetching salesman:', error);
-            return 'Unknown';
-        }
-    };
+    // const getSalesmanName = async (salesmanId) => {
+    //     if (!salesmanId) return 'Unassigned';
+    //     try {
+    //         const salesmanDoc = await getDoc(doc(db, 'salesman', salesmanId));
+    //         if (salesmanDoc.exists()) {
+    //             return salesmanDoc.data().name || 'Unknown';
+    //         }
+    //         return 'Unknown';
+    //     } catch (error) {
+    //         console.error('Error fetching salesman:', error);
+    //         return 'Unknown';
+    //     }
+    // };
 
     // Helper to format date for comparison (YYYY-MM-DD -> DD/MM/YYYY)
     const formatDateForComparison = (isoDate) => {

@@ -199,9 +199,7 @@ export const AppProvider = ({ children }) => {
   // Companies, Categories, Subcategories (extracted from existing products)
   const [companies] = useState(['LG', 'Samsung', 'Whirlpool', 'Godrej', 'Haier', 'Voltas', 'Blue Star', 'Carrier']);
   const [categories, setCategories] = useState([]);
-  const [subcategories, setSubcategories] = useState({});
-  const [categoriesLoading, setCategoriesLoading] = useState(false);
-  const [subcategoriesLoading, setSubcategoriesLoading] = useState(false);
+  const [subcategories, setSubcategories] = useState([]);
 
   // Extract categories and subcategories from existing products
   const extractCategoriesFromProducts = (productsData) => {
@@ -233,50 +231,6 @@ export const AppProvider = ({ children }) => {
     
     setCategories(sortedCategories);
     setSubcategories(sortedSubcategories);
-  };
-
-  // Fetch categories from existing products
-  const fetchCategories = async () => {
-    try {
-      setCategoriesLoading(true);
-      // Categories are extracted from products
-      extractCategoriesFromProducts(products);
-    } catch (err) {
-      console.error('Error extracting categories:', err);
-    } finally {
-      setCategoriesLoading(false);
-    }
-  };
-
-  // Fetch subcategories for a specific category from existing products
-  const fetchSubcategories = async (category) => {
-    try {
-      setSubcategoriesLoading(true);
-      // Subcategories are already extracted, just ensure they exist
-      if (!subcategories[category]) {
-        setSubcategories(prev => ({
-          ...prev,
-          [category]: []
-        }));
-      }
-    } catch (err) {
-      console.error('Error fetching subcategories:', err);
-    } finally {
-      setSubcategoriesLoading(false);
-    }
-  };
-
-  // Fetch all subcategories from existing products
-  const fetchAllSubcategories = async () => {
-    try {
-      setSubcategoriesLoading(true);
-      // Subcategories are extracted from products
-      extractCategoriesFromProducts(products);
-    } catch (err) {
-      console.error('Error fetching all subcategories:', err);
-    } finally {
-      setSubcategoriesLoading(false);
-    }
   };
 
   // Extract categories and subcategories whenever products change

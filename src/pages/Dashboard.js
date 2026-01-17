@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, Package, DollarSign, Star, RefreshCw, Megaphone, Calendar, ChevronLeft, ChevronRight, Phone, MapPin, Clock, CheckCircle, AlertCircle } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { collection, getDocs, query, where, collectionGroup, doc, getDoc } from 'firebase/firestore';
+import { Users, Package, DollarSign, Star, RefreshCw, Megaphone, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { collection, getDocs, query, collectionGroup } from 'firebase/firestore';
 import { db } from '../firebase';
 
 const Dashboard = () => {
@@ -47,7 +46,7 @@ const Dashboard = () => {
       };
       fetchAppointments();
       return () => { isMounted = false; };
-    }, [salesmen]);
+    }, [salesmen, getSalesmanNameById]);
 
   // Fetch salesmen from Firestore
   useEffect(() => {
@@ -79,7 +78,7 @@ const Dashboard = () => {
   
   const [selectedDate, setSelectedDate] = useState(getYesterdayDate()); // YYYY-MM-DD
   const [offers, setOffers] = useState([]);
-  const [offersLoading, setOffersLoading] = useState(true);
+  // const [offersLoading, setOffersLoading] = useState(true);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [allOfferImages, setAllOfferImages] = useState([]);
 
@@ -93,7 +92,7 @@ const Dashboard = () => {
     let isMounted = true;
 
     const fetchOffers = async () => {
-      setOffersLoading(true);
+      // setOffersLoading(true);
       try {
         const [year, month] = selectedMonth.split('-');
         const docId = `${year}-${month}`;
@@ -148,7 +147,7 @@ const Dashboard = () => {
         }
       } finally {
         if (isMounted) {
-          setOffersLoading(false);
+          // setOffersLoading(false);
         }
       }
     };
@@ -312,7 +311,7 @@ const Dashboard = () => {
 
   // Products added this month
   const productsThisMonth = products.filter(p => getMonthFromDate(p.createdAt) === selectedMonth);
-  const totalProductsMonth = productsThisMonth.length;
+  // const totalProductsMonth = productsThisMonth.length;
   const totalProducts = products.length;
 
   // --- Follow-up stats from appointments ---
@@ -326,20 +325,20 @@ const Dashboard = () => {
     return aptMonth === selectedMonth;
   });
   // Pending follow-ups: status is 'Pending' and no followUp is 'Complete' or 'Purchased'
-  const pendingFollowUps = appointmentsThisMonth.filter(a => {
-    if ((a.status || '').toLowerCase() !== 'pending') return false;
-    if (!Array.isArray(a.followUps) || a.followUps.length === 0) return true;
-    // If any followUp has status 'Complete' or 'Purchased', not pending
-    return !a.followUps.some(fu => {
-      const s = (fu.status || '').toLowerCase();
-      return s === 'complete' || s === 'purchased';
-    });
-  }).length;
+  // const pendingFollowUps = appointmentsThisMonth.filter(a => {
+  //   if ((a.status || '').toLowerCase() !== 'pending') return false;
+  //   if (!Array.isArray(a.followUps) || a.followUps.length === 0) return true;
+  //   // If any followUp has status 'Complete' or 'Purchased', not pending
+  //   return !a.followUps.some(fu => {
+  //     const s = (fu.status || '').toLowerCase();
+  //     return s === 'complete' || s === 'purchased';
+  //   });
+  // }).length;
   // Purchased this month: status is 'Purchased' (case-insensitive)
-  const purchasedCount = appointmentsThisMonth.filter(a => (a.status || '').toLowerCase() === 'purchased').length;
+  // const purchasedCount = appointmentsThisMonth.filter(a => (a.status || '').toLowerCase() === 'purchased').length;
 
   // Total incentives for this month
-  const totalIncentivesMonth = productsThisMonth.reduce((sum, p) => sum + (p.incentive || 0), 0);
+  // const totalIncentivesMonth = productsThisMonth.reduce((sum, p) => sum + (p.incentive || 0), 0);
 
   // Top employee of the month (by number of products added, fallback to '-')
   const employeeProductMap = {};
@@ -358,10 +357,10 @@ const Dashboard = () => {
   }
 
   // Average rating (all time)
-  const ratedValues = products.map(p => Number(p.rating)).filter(v => Number.isFinite(v) && v > 0);
-  const averageRating = ratedValues.length
-    ? (ratedValues.reduce((sum, value) => sum + value, 0) / ratedValues.length).toFixed(1)
-    : '0.0';
+  // const ratedValues = products.map(p => Number(p.rating)).filter(v => Number.isFinite(v) && v > 0);
+  // const averageRating = ratedValues.length
+  //   ? (ratedValues.reduce((sum, value) => sum + value, 0) / ratedValues.length).toFixed(1)
+  //   : '0.0';
 
   // --- Dashboard stat cards ---
   const stats = [

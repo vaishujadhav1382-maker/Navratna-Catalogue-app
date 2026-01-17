@@ -197,12 +197,6 @@ const ProductsEnhanced = () => {
     return filteredProducts.slice(start, start + pageSize);
   }, [filteredProducts, currentPage]);
 
-  // Average price difference (discount %) for valid products
-  const validDiscountProducts = useMemo(
-    () => filteredProducts.filter(p => (p.price || 0) > 0 && (p.minPrice || 0) >= 0 && (p.minPrice || 0) <= (p.price || 0)),
-    [filteredProducts]
-  );
-
   // Reset dependent filters when parent changes
   const handleCategoryChange = (category) => {
     setSelectedCategory(category);

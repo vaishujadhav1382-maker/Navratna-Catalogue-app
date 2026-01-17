@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
     Plus,
     FileText,
@@ -81,7 +81,6 @@ const Catalogues = () => {
     const {
         catalogs,
         catalogsLoading,
-        catalogsError,
         addCatalog,
         deleteCatalog,
         fetchCatalogs
@@ -116,7 +115,7 @@ const Catalogues = () => {
         if (catalogs.length === 0) {
             fetchCatalogs();
         }
-    }, []);
+    }, [catalogs.length, fetchCatalogs]);
 
     const handleCloseModal = () => {
         setShowCreateModal(false);
