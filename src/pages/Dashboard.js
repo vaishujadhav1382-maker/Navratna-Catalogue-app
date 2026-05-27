@@ -16,9 +16,14 @@ const Dashboard = () => {
   // Get salesman name from ID
   const getSalesmanNameById = useCallback((salesmanId) => {
     if (!salesmanId) return 'Unassigned';
+    // Try to find in employees first (which contains all roles: admin, telecaller, salesman)
+    const emp = employees.find(e => e.id === salesmanId || e.empId === salesmanId);
+    if (emp) return emp.name;
+    // Fallback to local salesmen list
     const salesman = salesmen.find(s => s.id === salesmanId);
     return salesman ? salesman.name : 'Unknown';
-  }, [salesmen]);
+  }, [employees, salesmen]);
+
 
     // Fetch appointments for follow-up stats
     useEffect(() => {
@@ -576,7 +581,7 @@ const Dashboard = () => {
                             {apt.customerName || 'Unknown'}
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                            {apt.customerMobile || 'N/A'}
+                            {apt.customerMobile || apt.mobileNumber || 'N/A'}
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
                             {apt.createdDate || 'N/A'}

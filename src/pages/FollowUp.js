@@ -36,9 +36,14 @@ const FollowUp = () => {
     // Get salesman name from ID
     const getSalesmanNameById = useCallback((salesmanId) => {
         if (!salesmanId) return 'Unassigned';
+        // Try to find in employees first (which contains all roles: admin, telecaller, salesman)
+        const emp = employees.find(e => e.id === salesmanId || e.empId === salesmanId);
+        if (emp) return emp.name;
+        // Fallback to local salesmen list
         const salesman = salesmen.find(s => s.id === salesmanId);
         return salesman ? salesman.name : 'Unknown';
-    }, [salesmen]);
+    }, [employees, salesmen]);
+
 
     useEffect(() => {
         let isMounted = true;
@@ -58,11 +63,29 @@ const FollowUp = () => {
                     };
                 });
 
-                // Sort by number of follow-ups (descending)
+                // Sort by oldest first (ascending order of creation/date)
+                const getTimestamp = (apt) => {
+                    if (!apt) return 0;
+                    if (typeof apt.createdAt === 'number') return apt.createdAt;
+                    if (apt.createdAt && typeof apt.createdAt.toDate === 'function') return apt.createdAt.toDate().getTime();
+                    if (apt.createdAt && apt.createdAt.seconds) return apt.createdAt.seconds * 1000;
+                    
+                    // Fallback to parse other date fields (DD/MM/YYYY format)
+                    const dateStr = apt.firstVisitDate || apt.createdDate || apt.date;
+                    if (dateStr && typeof dateStr === 'string') {
+                        const parts = dateStr.split('/');
+                        if (parts.length === 3) {
+                            const parsed = new Date(parts[2], parts[1] - 1, parts[0]);
+                            if (!isNaN(parsed.getTime())) return parsed.getTime();
+                        }
+                        const parsed = new Date(dateStr);
+                        if (!isNaN(parsed.getTime())) return parsed.getTime();
+                    }
+                    return 0;
+                };
+
                 const sortedData = fetchedData.sort((a, b) => {
-                    const countA = a.followUps ? a.followUps.length : 0;
-                    const countB = b.followUps ? b.followUps.length : 0;
-                    return countB - countA;
+                    return getTimestamp(a) - getTimestamp(b);
                 });
 
                 if (isMounted) {
@@ -220,7 +243,7 @@ const FollowUp = () => {
                 'Status': displayStatus,
                 'Follow-ups Count': apt.followUps?.length || 0,
                 'Follow-up History': followUpHistory,
-                'Customer Mobile': apt.customerMobile || 'N/A',
+                'Customer Mobile': apt.customerMobile || apt.mobileNumber || 'N/A',
                 'Created Date': apt.createdDate || 'N/A',
             };
         });
@@ -535,7 +558,7 @@ const FollowUp = () => {
                                                 </div>
                                             </td>
                                             <td className="px-3 py-2 whitespace-nowrap">
-                                                <div className="text-xs text-gray-900 dark:text-white">{apt.customerMobile || "-"}</div>
+                                                <div className="text-xs text-gray-900 dark:text-white">{apt.customerMobile || apt.mobileNumber || "-"}</div>
                                             </td>
                                             <td className="px-3 py-2 whitespace-nowrap">
                                                 <div className="text-xs text-gray-900 dark:text-white">{firstVisitDate}</div>
