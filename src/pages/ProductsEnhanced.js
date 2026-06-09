@@ -13,6 +13,8 @@ const ProductsEnhanced = () => {
   const [searchQuery, setSearchQuery] = useState('');
   // New: Filter for products added this month
   const [filterThisMonth, setFilterThisMonth] = useState(false);
+  // New: Filter for products without pricing
+  const [filterWithoutPricing, setFilterWithoutPricing] = useState(false);
 
   // Custom dropdown open states
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
@@ -141,6 +143,15 @@ const ProductsEnhanced = () => {
         if (createdAt.getFullYear() !== thisYear || createdAt.getMonth() !== thisMonth) return false;
       }
       
+      // New: filter for without pricing
+      if (filterWithoutPricing) {
+        const hasValidPrice = product.price && !isNaN(product.price) && parseFloat(product.price) > 0;
+        const hasValidMinPrice = product.minPrice && !isNaN(product.minPrice) && parseFloat(product.minPrice) > 0;
+        
+        // Hide only if BOTH prices are valid (>0). Show if EITHER is invalid/0.
+        if (hasValidPrice && hasValidMinPrice) return false;
+      }
+      
       // Search filter - search by product name, category, and model number
       if (lowerSearchQuery) {
         const productName = (product.name || '').toLowerCase();
@@ -157,29 +168,7 @@ const ProductsEnhanced = () => {
       
       return true;
     });
-  }, [products, selectedCategory, selectedSubcategory, filterThisMonth, searchQuery]);
-  // New: Calculate average incentive for this month's filtered products
-  const thisMonthProducts = useMemo(() => {
-    const now = new Date();
-    const thisMonth = now.getMonth();
-    const thisYear = now.getFullYear();
-    return products.filter(product => {
-      let createdAt = product.createdAt;
-      if (createdAt && typeof createdAt === 'object' && typeof createdAt.seconds === 'number') {
-        createdAt = new Date(createdAt.seconds * 1000);
-      } else if (createdAt && createdAt.toDate) {
-        createdAt = createdAt.toDate();
-      } else if (typeof createdAt === 'string' || typeof createdAt === 'number') {
-        createdAt = new Date(createdAt);
-      }
-      if (!(createdAt instanceof Date) || isNaN(createdAt)) return false;
-      return createdAt.getFullYear() === thisYear && createdAt.getMonth() === thisMonth;
-    });
-  }, [products]);
-
-  const avgIncentiveThisMonth = thisMonthProducts.length
-    ? Math.round(thisMonthProducts.reduce((sum, p) => sum + (parseFloat(p.incentive) || 0), 0) / thisMonthProducts.length)
-    : 0;
+  }, [products, selectedCategory, selectedSubcategory, filterThisMonth, filterWithoutPricing, searchQuery]);
 
   // Pagination for products list
   const [currentPage, setCurrentPage] = useState(1);
@@ -188,7 +177,7 @@ const ProductsEnhanced = () => {
   // Reset to first page whenever filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedCategory, selectedSubcategory]);
+  }, [selectedCategory, selectedSubcategory, filterThisMonth, filterWithoutPricing, searchQuery]);
 
   const totalPages = Math.max(1, Math.ceil(filteredProducts.length / pageSize));
 
@@ -567,7 +556,7 @@ const ProductsEnhanced = () => {
   mrp: parseFloat(findValue(row, ['MRP', 'mrp', 'Maximum Retail Price', 'maximum retail price', 'List Price', 'list price'])) || 0, // ADD THIS
   price: parseFloat(findValue(row, ['Price', 'price', 'Cost', 'cost', 'Amount'])) || 0,
   minPrice: parseFloat(findValue(row, ['Min Price', 'min price', 'Minimum Price', 'minimum price', 'Bottom Price', 'bottom price', 'MinPrice', 'minPrice', 'Base Price', 'base price', 'Lowest Price', 'lowest price'])) || 0,
-  incentive: parseFloat(findValue(row, ['Incentive', 'incentive', 'Commission', 'commission', 'Bonus'])) || 0,
+  incentive: parseFloat(findValue(row, ['Costing', 'costing', 'Incentive', 'incentive', 'Commission'])) || 0,
 }));
         
         try {
@@ -600,7 +589,7 @@ const ProductsEnhanced = () => {
     return;
   }
 
-  const headers = ['Category', 'Subcategory', 'Product Name', 'MRP', 'Price', 'Bottom Price', 'Incentive'];
+  const headers = ['Category', 'Subcategory', 'Product Name', 'MRP', 'Price', 'Bottom Price', 'Costing'];
   const rows = products.map(p => [
     p.category || '',
     p.subcategory || '',
@@ -755,14 +744,22 @@ const ProductsEnhanced = () => {
 
       {/* Filter Section */}
       <div className="card">
-        {/* New: This Month Filter Toggle */}
-        <div className="mb-4 flex items-center gap-3">
+        {/* Filter Toggles */}
+        <div className="mb-4 flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={() => setFilterThisMonth(v => !v)}
             className={`px-4 py-2 rounded-lg font-medium transition-colors border focus:outline-none focus:ring-2 focus:ring-blue-400/50 ${filterThisMonth ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600'}`}
           >
             {filterThisMonth ? 'Showing only products added this month' : 'Show only products added this month'}
+          </button>
+          
+          <button
+            type="button"
+            onClick={() => setFilterWithoutPricing(v => !v)}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors border focus:outline-none focus:ring-2 focus:ring-orange-400/50 ${filterWithoutPricing ? 'bg-orange-600 text-white border-orange-600' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600'}`}
+          >
+            {filterWithoutPricing ? 'Showing only products without pricing' : 'Show only products without pricing'}
           </button>
         </div>
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
@@ -932,42 +929,6 @@ const ProductsEnhanced = () => {
         )}
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {/* New: Avg Incentive for this month */}
-                <div className="card bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 border border-orange-200 dark:border-orange-700">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-orange-600 dark:text-orange-400 mb-1">Avg Incentive (This Month)</p>
-                      <h3 className="text-3xl font-bold text-orange-700 dark:text-orange-300">
-                        ₹{avgIncentiveThisMonth}
-                      </h3>
-                    </div>
-                    <Award className="w-12 h-12 text-orange-500 opacity-50" />
-                  </div>
-                </div>
-        <div className="card bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border border-blue-200 dark:border-blue-700">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-blue-600 dark:text-blue-400 mb-1">Showing Products</p>
-              <h3 className="text-3xl font-bold text-blue-700 dark:text-blue-300">{filteredProducts.length}</h3>
-            </div>
-            <PackageIcon className="w-12 h-12 text-blue-500 opacity-50" />
-          </div>
-        </div>
-
-        <div className="card bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border border-purple-200 dark:border-purple-700">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-purple-600 dark:text-purple-400 mb-1">Products Added (This Month)</p>
-              <h3 className="text-3xl font-bold text-purple-700 dark:text-purple-300">
-                {thisMonthProducts.length}
-              </h3>
-            </div>
-            <PackageIcon className="w-12 h-12 text-purple-500 opacity-50" />
-          </div>
-        </div>
-      </div>
 
       {/* Products Table */}
       <div className="card overflow-x-auto">
@@ -1008,7 +969,7 @@ const ProductsEnhanced = () => {
                     <th className="px-4 py-3 text-right text-sm font-semibold text-gray-900 dark:text-white">Sales Price</th>
                     <th className="px-4 py-3 text-right text-sm font-semibold text-gray-900 dark:text-white">MRP</th>
                     <th className="px-4 py-3 text-right text-sm font-semibold text-gray-900 dark:text-white">Best Price</th>
-                    <th className="px-4 py-3 text-right text-sm font-semibold text-gray-900 dark:text-white">Incentive</th>
+                    <th className="px-4 py-3 text-right text-sm font-semibold text-gray-900 dark:text-white">Costing</th>
                     <th className="px-4 py-3 text-center text-sm font-semibold text-gray-900 dark:text-white">Actions</th>
                   </tr>
                 </thead>
@@ -1044,7 +1005,7 @@ const ProductsEnhanced = () => {
                       }}>
                         {((currentPage - 1) * pageSize) + index + 1}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-white font-medium max-w-xs truncate">
+                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-white font-medium break-words whitespace-normal min-w-[250px]">
                         {product.name}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
@@ -1390,10 +1351,10 @@ const ProductsEnhanced = () => {
                           placeholder="24000"
                         />
                       </div>
-                      {/* Incentive */}
+                      {/* Costing */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Incentive (₹) <span className="text-xs text-gray-400">(optional)</span>
+                          Costing (₹) <span className="text-xs text-gray-400">(optional)</span>
                         </label>
                         <input
                           type="number"
@@ -1546,7 +1507,7 @@ const ProductsEnhanced = () => {
                       <h4 className="text-sm font-semibold text-blue-700 dark:text-blue-400 mb-3">Additional Information</h4>
                       <div className="space-y-3">
                         <div>
-                          <p className="text-xs text-blue-600 dark:text-blue-400">Incentive</p>
+                          <p className="text-xs text-blue-600 dark:text-blue-400">Costing</p>
                           <p className="font-semibold text-lg text-blue-700 dark:text-blue-300">
                             ₹{(detailsProduct.incentive !== undefined && detailsProduct.incentive !== null && !isNaN(detailsProduct.incentive))
                               ? Number(detailsProduct.incentive).toLocaleString()

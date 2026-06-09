@@ -2,21 +2,21 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { collectionGroup, getDocs, collection, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useApp } from '../context/AppContext';
-import { MessageCircle, ChevronDown, ChevronUp, Filter, XCircle, Clock, Download, Trash2 } from 'lucide-react';
+import { MessageCircle, ChevronDown, ChevronUp, Filter, XCircle, Clock, Download, Trash2, User, Package } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as XLSX from 'xlsx';
 
 const FollowUp = () => {
-        // Add FollowUp to Firestore
-        // const addFollowUpToFirestore = async (followUpData) => {
-        //     try {
-        //         const docRef = await addDoc(collection(db, 'appointments'), followUpData);
-        //         return docRef.id;
-        //     } catch (error) {
-        //         console.error('Error adding follow-up:', error);
-        //         return null;
-        //     }
-        // };
+    // Add FollowUp to Firestore
+    // const addFollowUpToFirestore = async (followUpData) => {
+    //     try {
+    //         const docRef = await addDoc(collection(db, 'appointments'), followUpData);
+    //         return docRef.id;
+    //     } catch (error) {
+    //         console.error('Error adding follow-up:', error);
+    //         return null;
+    //     }
+    // };
     const { employees } = useApp();
     const [appointments, setAppointments] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -25,9 +25,11 @@ const FollowUp = () => {
 
     // Filter States
     const [selectedEmployee, setSelectedEmployee] = useState('all');
-    const [statusFilter, setStatusFilter] = useState('pending');
+    const [statusFilter, setStatusFilter] = useState('all');
     const [dateFilterStart, setDateFilterStart] = useState('');
     const [dateFilterEnd, setDateFilterEnd] = useState('');
+    const [dateFilterType, setDateFilterType] = useState('creation');
+    const [sortOrder, setSortOrder] = useState('newest');
     // Search bar state
     const [searchTerm, setSearchTerm] = useState("");
     // Delete confirmation state
@@ -55,7 +57,7 @@ const FollowUp = () => {
                 const fetchedData = querySnapshot.docs.map((doc) => {
                     const data = doc.data();
                     const salesmanName = getSalesmanNameById(data.assignedTo);
-                    
+
                     return {
                         id: doc.id,
                         ...data,
@@ -63,33 +65,8 @@ const FollowUp = () => {
                     };
                 });
 
-                // Sort by oldest first (ascending order of creation/date)
-                const getTimestamp = (apt) => {
-                    if (!apt) return 0;
-                    if (typeof apt.createdAt === 'number') return apt.createdAt;
-                    if (apt.createdAt && typeof apt.createdAt.toDate === 'function') return apt.createdAt.toDate().getTime();
-                    if (apt.createdAt && apt.createdAt.seconds) return apt.createdAt.seconds * 1000;
-                    
-                    // Fallback to parse other date fields (DD/MM/YYYY format)
-                    const dateStr = apt.firstVisitDate || apt.createdDate || apt.date;
-                    if (dateStr && typeof dateStr === 'string') {
-                        const parts = dateStr.split('/');
-                        if (parts.length === 3) {
-                            const parsed = new Date(parts[2], parts[1] - 1, parts[0]);
-                            if (!isNaN(parsed.getTime())) return parsed.getTime();
-                        }
-                        const parsed = new Date(dateStr);
-                        if (!isNaN(parsed.getTime())) return parsed.getTime();
-                    }
-                    return 0;
-                };
-
-                const sortedData = fetchedData.sort((a, b) => {
-                    return getTimestamp(a) - getTimestamp(b);
-                });
-
                 if (isMounted) {
-                    setAppointments(sortedData);
+                    setAppointments(fetchedData);
                 }
             } catch (error) {
                 console.error("Error fetching appointments:", error);
@@ -137,21 +114,6 @@ const FollowUp = () => {
         return emp ? emp.name : empId;
     };
 
-    // Helper to get salesman name from salesman ID
-    // const getSalesmanName = async (salesmanId) => {
-    //     if (!salesmanId) return 'Unassigned';
-    //     try {
-    //         const salesmanDoc = await getDoc(doc(db, 'salesman', salesmanId));
-    //         if (salesmanDoc.exists()) {
-    //             return salesmanDoc.data().name || 'Unknown';
-    //         }
-    //         return 'Unknown';
-    //     } catch (error) {
-    //         console.error('Error fetching salesman:', error);
-    //         return 'Unknown';
-    //     }
-    // };
-
     // Helper to format date for comparison (YYYY-MM-DD -> DD/MM/YYYY)
     const formatDateForComparison = (isoDate) => {
         if (!isoDate) return '';
@@ -170,6 +132,8 @@ const FollowUp = () => {
         setStatusFilter('all');
         setDateFilterStart('');
         setDateFilterEnd('');
+        setDateFilterType('creation');
+        setSortOrder('newest');
     };
 
     const handleDeleteAppointment = async (appointmentId) => {
@@ -181,7 +145,7 @@ const FollowUp = () => {
             // Query to find the document in the nested structure
             const querySnapshot = await getDocs(collectionGroup(db, 'appointments'));
             const docToDelete = querySnapshot.docs.find(doc => doc.id === appointmentId);
-            
+
             if (docToDelete) {
                 await deleteDoc(docToDelete.ref);
                 // Remove from state
@@ -209,25 +173,6 @@ const FollowUp = () => {
                 displayStatus = 'Purchased';
             } else if (apt.products && apt.products.some(p => (p.status || '').toLowerCase().includes('cancel'))) {
                 displayStatus = 'Cancelled (Product)';
-            }
-
-            // If filtering by date, show the last interaction date
-            if (dateFilterStart || dateFilterEnd) {
-                // Show last interaction date
-                if (apt.followUps && apt.followUps.length > 0) {
-                    const lastFollowUp = apt.followUps[apt.followUps.length - 1];
-                    if (lastFollowUp && lastFollowUp.date) {
-                        displayDate = lastFollowUp.date;
-                    }
-                }
-            } else {
-                // Show last interaction date
-                if (apt.followUps && apt.followUps.length > 0) {
-                    const lastFollowUp = apt.followUps[apt.followUps.length - 1];
-                    if (lastFollowUp && lastFollowUp.date) {
-                        displayDate = lastFollowUp.date;
-                    }
-                }
             }
 
             // Compile follow-up history
@@ -306,20 +251,29 @@ const FollowUp = () => {
         }
 
         // 3. Date Filter (Range)
-        // DB Format: "20/12/2025" (DD/MM/YYYY)
         let matchDate = true;
         if (dateFilterStart || dateFilterEnd) {
             const startDate = dateFilterStart ? formatDateForComparison(dateFilterStart) : null;
             const endDate = dateFilterEnd ? formatDateForComparison(dateFilterEnd) : null;
 
-            const dateToCheck = apt.followUps && apt.followUps.length > 0 
-                ? apt.followUps[apt.followUps.length - 1].date 
-                : (apt.date || apt.createdDate);
+            let dateToCheck = null;
+            if (dateFilterType === 'interaction' && apt.followUps && apt.followUps.length > 0) {
+                dateToCheck = apt.followUps[apt.followUps.length - 1].date;
+            } else {
+                dateToCheck = apt.createdDate || apt.date || apt.firstVisitDate;
+                if (!dateToCheck && apt.createdAt) {
+                    if (typeof apt.createdAt.toDate === 'function') {
+                        dateToCheck = apt.createdAt.toDate().toLocaleDateString('en-GB');
+                    } else if (apt.createdAt.seconds) {
+                        dateToCheck = new Date(apt.createdAt.seconds * 1000).toLocaleDateString('en-GB');
+                    }
+                }
+            }
 
             if (dateToCheck) {
                 const [d, m, y] = dateToCheck.split('/');
                 const checkDateObj = new Date(y, m - 1, d);
-                
+
                 let inRange = true;
                 if (startDate) {
                     const [sd, sm, sy] = startDate.split('/');
@@ -349,6 +303,33 @@ const FollowUp = () => {
         }
 
         return matchEmployee && matchStatus && matchDate && matchSearch;
+    });
+
+    // Helper for sorting
+    const getTimestamp = (apt) => {
+        if (!apt) return 0;
+        if (typeof apt.createdAt === 'number') return apt.createdAt;
+        if (apt.createdAt && typeof apt.createdAt.toDate === 'function') return apt.createdAt.toDate().getTime();
+        if (apt.createdAt && apt.createdAt.seconds) return apt.createdAt.seconds * 1000;
+        
+        // Fallback to parse other date fields (DD/MM/YYYY format)
+        const dateStr = apt.createdDate || apt.firstVisitDate || apt.date;
+        if (dateStr && typeof dateStr === 'string') {
+            const parts = dateStr.split('/');
+            if (parts.length === 3) {
+                const parsed = new Date(parts[2], parts[1] - 1, parts[0]);
+                if (!isNaN(parsed.getTime())) return parsed.getTime();
+            }
+            const parsed = new Date(dateStr);
+            if (!isNaN(parsed.getTime())) return parsed.getTime();
+        }
+        return 0;
+    };
+
+    const sortedAndFilteredAppointments = [...filteredAppointments].sort((a, b) => {
+        const timeA = getTimestamp(a);
+        const timeB = getTimestamp(b);
+        return sortOrder === 'newest' ? timeB - timeA : timeA - timeB;
     });
 
     if (loading) {
@@ -388,7 +369,7 @@ const FollowUp = () => {
                     </div>
                     <div className="flex items-center gap-3">
                         <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-4 py-2 rounded-lg font-medium text-sm">
-                            Total Records: {filteredAppointments.length}
+                            Total Records: {sortedAndFilteredAppointments.length}
                         </div>
                         <motion.button
                             whileHover={{ scale: 1.05 }}
@@ -443,6 +424,28 @@ const FollowUp = () => {
                                 <option value="cancelled">Cancelled</option>
                             </select>
 
+                            {/* Sort Filter */}
+                            <select
+                                value={sortOrder}
+                                onChange={(e) => setSortOrder(e.target.value)}
+                                className="px-2 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-xs focus:ring-2 focus:ring-primary/50 outline-none cursor-pointer"
+                            >
+                                <option value="newest">Sort: Newest First</option>
+                                <option value="oldest">Sort: Oldest First</option>
+                            </select>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+                            {/* Date Filter Type */}
+                            <select
+                                value={dateFilterType}
+                                onChange={(e) => setDateFilterType(e.target.value)}
+                                className="px-2 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-xs focus:ring-2 focus:ring-primary/50 outline-none cursor-pointer"
+                            >
+                                <option value="creation">By Creation Date</option>
+                                <option value="interaction">By Last Interaction</option>
+                            </select>
+
                             {/* Date Filter From */}
                             <div className="flex items-center bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
                                 <span className="px-2 py-2 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">From:</span>
@@ -476,7 +479,7 @@ const FollowUp = () => {
                                 Today
                             </button>
 
-                            {(selectedEmployee !== 'all' || statusFilter !== 'all' || dateFilterStart || dateFilterEnd) && (
+                            {(selectedEmployee !== 'all' || statusFilter !== 'all' || dateFilterStart || dateFilterEnd || sortOrder !== 'newest' || dateFilterType !== 'creation') && (
                                 <button
                                     onClick={clearFilters}
                                     className="px-2 py-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-xs font-medium underline rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors whitespace-nowrap"
@@ -496,6 +499,18 @@ const FollowUp = () => {
                             <tr>
                                 <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Name</th>
                                 <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Number</th>
+                                <th 
+                                    className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors group"
+                                    onClick={() => setSortOrder(sortOrder === 'newest' ? 'oldest' : 'newest')}
+                                    title="Click to toggle sort order"
+                                >
+                                    <div className="flex items-center gap-1">
+                                        Creation Date
+                                        <span className="text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-200">
+                                            {sortOrder === 'newest' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
+                                        </span>
+                                    </div>
+                                </th>
                                 <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">1st Visit</th>
                                 <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Product</th>
                                 <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Salesman</th>
@@ -505,7 +520,7 @@ const FollowUp = () => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                            {filteredAppointments.map((apt) => {
+                            {sortedAndFilteredAppointments.map((apt) => {
                                 // Determine the display date
                                 // let displayDate = apt.createdDate || apt.date || 'N/A';
                                 // Determine display status
@@ -542,23 +557,48 @@ const FollowUp = () => {
                                 }
                                 // Product 1 name
                                 const product1 = apt.products && apt.products[0] ? apt.products[0].name : "-";
+                                // Format creation date
+                                let creationDateDisplay = apt.createdDate || "-";
+                                if (apt.createdAt) {
+                                    if (typeof apt.createdAt.toDate === 'function') {
+                                        creationDateDisplay = apt.createdAt.toDate().toLocaleDateString('en-GB');
+                                    } else if (apt.createdAt.seconds) {
+                                        creationDateDisplay = new Date(apt.createdAt.seconds * 1000).toLocaleDateString('en-GB');
+                                    } else if (typeof apt.createdAt === 'number') {
+                                        creationDateDisplay = new Date(apt.createdAt).toLocaleDateString('en-GB');
+                                    } else if (typeof apt.createdAt === 'string') {
+                                        const d = new Date(apt.createdAt);
+                                        if (!isNaN(d)) creationDateDisplay = d.toLocaleDateString('en-GB');
+                                    }
+                                }
                                 // First visit date
-                                const firstVisitDate = apt.firstVisitDate || apt.createdDate || apt.date || "-";
+                                const firstVisitDate = apt.firstVisitDate || apt.date || "-";
+                                
+                                // Robust mobile number extraction
+                                const displayMobile = apt.customerMobile || apt.mobileNumber || apt.mobile || apt.phone || apt.phoneNumber || apt.contactNumber || apt.contact || "-";
+
                                 return (
                                     <React.Fragment key={apt.id}>
                                         <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                            <td className="px-3 py-2 whitespace-nowrap">
+                                            <td
+                                                className="px-3 py-2 whitespace-nowrap cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                                onClick={() => toggleExpand(apt.id)}
+                                                title="Click to view details"
+                                            >
                                                 <div className="flex items-center gap-2">
                                                     <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
                                                         {apt.customerName?.charAt(0).toUpperCase()}
                                                     </div>
                                                     <div className="min-w-0">
-                                                        <div className="text-xs font-medium text-gray-900 dark:text-white truncate">{apt.customerName}</div>
+                                                        <div className="text-xs font-medium text-primary hover:underline truncate">{apt.customerName}</div>
                                                     </div>
                                                 </div>
                                             </td>
                                             <td className="px-3 py-2 whitespace-nowrap">
-                                                <div className="text-xs text-gray-900 dark:text-white">{apt.customerMobile || apt.mobileNumber || "-"}</div>
+                                                <div className="text-xs text-gray-900 dark:text-white">{displayMobile}</div>
+                                            </td>
+                                            <td className="px-3 py-2 whitespace-nowrap">
+                                                <div className="text-xs text-gray-900 dark:text-white">{creationDateDisplay}</div>
                                             </td>
                                             <td className="px-3 py-2 whitespace-nowrap">
                                                 <div className="text-xs text-gray-900 dark:text-white">{firstVisitDate}</div>
@@ -609,35 +649,77 @@ const FollowUp = () => {
                                                     animate={{ opacity: 1, height: 'auto' }}
                                                     exit={{ opacity: 0, height: 0 }}
                                                 >
-                                                    <td colSpan="8" className="px-3 py-3 bg-gray-50 dark:bg-gray-800/50">
-                                                        <div className="space-y-3">
-                                                            <h4 className="text-xs font-semibold text-gray-900 dark:text-white flex items-center">
-                                                                <MessageCircle className="w-3 h-3 mr-2" />
-                                                                Follow-up History
-                                                            </h4>
-                                                            {apt.followUps && apt.followUps.length > 0 ? (
-                                                                <div className="space-y-2">
-                                                                    {apt.followUps.map((followUp, index) => (
-                                                                        <div key={index} className="flex gap-3 p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                                                                            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-xs font-bold text-blue-600 dark:text-blue-400">
-                                                                                {index + 1}
-                                                                            </div>
-                                                                            <div className="flex-1 min-w-0">
-                                                                                <div className="flex items-center justify-between mb-0.5">
-                                                                                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                                                                                        {followUp.date}
-                                                                                    </span>
-                                                                                </div>
-                                                                                <p className="text-xs text-gray-700 dark:text-gray-300 break-words">
-                                                                                    {followUp.text}
-                                                                                </p>
-                                                                            </div>
-                                                                        </div>
-                                                                    ))}
+                                                    <td colSpan="9" className="px-3 py-3 bg-gray-50 dark:bg-gray-800/50">
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                            {/* Customer Details */}
+                                                            <div className="space-y-3">
+                                                                <h4 className="text-xs font-semibold text-gray-900 dark:text-white flex items-center">
+                                                                    <User className="w-3 h-3 mr-2" />
+                                                                    Customer Details
+                                                                </h4>
+                                                                <div className="bg-white dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-700 text-xs text-gray-700 dark:text-gray-300 space-y-1">
+                                                                    <p><strong className="font-medium text-gray-900 dark:text-gray-200">Name:</strong> {apt.customerName || 'N/A'}</p>
+                                                                    <p><strong className="font-medium text-gray-900 dark:text-gray-200">Mobile:</strong> {displayMobile}</p>
+                                                                    {(apt.address || apt.city) && (
+                                                                        <p><strong className="font-medium text-gray-900 dark:text-gray-200">Address:</strong> {[apt.address, apt.city].filter(Boolean).join(', ')}</p>
+                                                                    )}
+                                                                    <p><strong className="font-medium text-gray-900 dark:text-gray-200">Added By:</strong> {getEmployeeName(apt.employeeId)}</p>
+                                                                    <p><strong className="font-medium text-gray-900 dark:text-gray-200">Salesman:</strong> {apt.salesmanName || 'Unassigned'}</p>
+                                                                    <p><strong className="font-medium text-gray-900 dark:text-gray-200">Current Status:</strong> {apt.status || 'Pending'}</p>
                                                                 </div>
-                                                            ) : (
-                                                                <p className="text-xs text-gray-500 italic">No follow-up history records found.</p>
-                                                            )}
+                                                            </div>
+
+                                                            {/* Product Details */}
+                                                            <div className="space-y-3">
+                                                                <h4 className="text-xs font-semibold text-gray-900 dark:text-white flex items-center">
+                                                                    <Package className="w-3 h-3 mr-2" />
+                                                                    Product Details
+                                                                </h4>
+                                                                {apt.products && apt.products.length > 0 ? (
+                                                                    <div className="space-y-2">
+                                                                        {apt.products.map((p, i) => (
+                                                                            <div key={i} className="bg-white dark:bg-gray-800 p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 text-xs">
+                                                                                <p className="font-semibold text-gray-900 dark:text-white">{p.name || p.productName || 'Unknown Product'}</p>
+                                                                                {p.status && <p className="text-gray-600 dark:text-gray-400 mt-1">Status: {p.status}</p>}
+                                                                                {p.price && <p className="text-gray-600 dark:text-gray-400">Price: {p.price}</p>}
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                ) : (
+                                                                    <p className="text-xs text-gray-500 italic bg-white dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-700">No products assigned.</p>
+                                                                )}
+                                                            </div>
+
+                                                            {/* Follow-up History */}
+                                                            <div className="space-y-3 md:col-span-2 mt-2">
+                                                                <h4 className="text-xs font-semibold text-gray-900 dark:text-white flex items-center border-t border-gray-200 dark:border-gray-700 pt-4">
+                                                                    <MessageCircle className="w-3 h-3 mr-2" />
+                                                                    Follow-up History
+                                                                </h4>
+                                                                {apt.followUps && apt.followUps.length > 0 ? (
+                                                                    <div className="space-y-2">
+                                                                        {apt.followUps.map((followUp, index) => (
+                                                                            <div key={index} className="flex gap-3 p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                                                                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-xs font-bold text-blue-600 dark:text-blue-400">
+                                                                                    {index + 1}
+                                                                                </div>
+                                                                                <div className="flex-1 min-w-0">
+                                                                                    <div className="flex items-center justify-between mb-0.5">
+                                                                                        <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                                                                                            {followUp.date}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                    <p className="text-xs text-gray-700 dark:text-gray-300 break-words">
+                                                                                        {followUp.text}
+                                                                                    </p>
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                ) : (
+                                                                    <p className="text-xs text-gray-500 italic">No follow-up history records found.</p>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     </td>
                                                 </motion.tr>
@@ -646,9 +728,9 @@ const FollowUp = () => {
                                     </React.Fragment>
                                 );
                             })}
-                            {filteredAppointments.length === 0 && (
+                            {sortedAndFilteredAppointments.length === 0 && (
                                 <tr>
-                                    <td colSpan="8" className="px-3 py-8 text-center text-gray-500 text-sm">
+                                    <td colSpan="9" className="px-3 py-8 text-center text-gray-500 text-sm">
                                         No appointments found.
                                     </td>
                                 </tr>

@@ -138,9 +138,9 @@ const Catalogues = () => {
             return;
         }
 
-        // Check file size (max 10MB)
-        if (file.size > 10 * 1024 * 1024) {
-            showToast('PDF file is too large. Maximum size is 10MB.', 'error');
+        // Check file size (max 500MB)
+        if (file.size > 500 * 1024 * 1024) {
+            showToast('PDF file is too large. Maximum size is 500MB.', 'error');
             return;
         }
 
@@ -392,7 +392,7 @@ const Catalogues = () => {
                                     >
                                         <Upload className="w-8 h-8 text-gray-400 mb-2" />
                                         <span className="text-sm text-gray-600 dark:text-gray-400">
-                                            {pdfPreview || 'Click to upload PDF (Max 10MB)'}
+                                            {pdfPreview || 'Click to upload PDF (Max 500MB)'}
                                         </span>
                                     </label>
                                 </div>

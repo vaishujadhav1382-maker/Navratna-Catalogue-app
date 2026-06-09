@@ -25,33 +25,33 @@ const Dashboard = () => {
   }, [employees, salesmen]);
 
 
-    // Fetch appointments for follow-up stats
-    useEffect(() => {
-      let isMounted = true;
-      const fetchAppointments = async () => {
-        setAppointmentsLoading(true);
-        try {
-          const querySnapshot = await getDocs(collectionGroup(db, 'appointments'));
-          const fetchedData = querySnapshot.docs.map((docSnap) => {
-            const data = docSnap.data();
-            const salesmanName = getSalesmanNameById(data.assignedTo);
-            
-            return { 
-              id: docSnap.id, 
-              ...data,
-              salesmanName
-            };
-          });
-          if (isMounted) setAppointments(fetchedData);
-        } catch (error) {
-          if (isMounted) setAppointments([]);
-        } finally {
-          if (isMounted) setAppointmentsLoading(false);
-        }
-      };
-      fetchAppointments();
-      return () => { isMounted = false; };
-    }, [salesmen, getSalesmanNameById]);
+  // Fetch appointments for follow-up stats
+  useEffect(() => {
+    let isMounted = true;
+    const fetchAppointments = async () => {
+      setAppointmentsLoading(true);
+      try {
+        const querySnapshot = await getDocs(collectionGroup(db, 'appointments'));
+        const fetchedData = querySnapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+          const salesmanName = getSalesmanNameById(data.assignedTo);
+
+          return {
+            id: docSnap.id,
+            ...data,
+            salesmanName
+          };
+        });
+        if (isMounted) setAppointments(fetchedData);
+      } catch (error) {
+        if (isMounted) setAppointments([]);
+      } finally {
+        if (isMounted) setAppointmentsLoading(false);
+      }
+    };
+    fetchAppointments();
+    return () => { isMounted = false; };
+  }, [salesmen, getSalesmanNameById]);
 
   // Fetch salesmen from Firestore
   useEffect(() => {
@@ -73,14 +73,14 @@ const Dashboard = () => {
   }, []);
 
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
-  
+
   // Set default date to yesterday
   const getYesterdayDate = () => {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     return yesterday.toISOString().slice(0, 10);
   };
-  
+
   const [selectedDate, setSelectedDate] = useState(getYesterdayDate()); // YYYY-MM-DD
   const [offers, setOffers] = useState([]);
   // const [offersLoading, setOffersLoading] = useState(true);
@@ -203,7 +203,7 @@ const Dashboard = () => {
   // Helper function to get purchase date from appointment
   const getPurchaseDate = (apt) => {
     if (!apt) return 'N/A';
-    
+
     // Check if any product has a purchase date
     if (apt.products && Array.isArray(apt.products)) {
       for (let product of apt.products) {
@@ -212,7 +212,7 @@ const Dashboard = () => {
         }
       }
     }
-    
+
     // Check if any follow-up mentions purchase
     if (apt.followUps && Array.isArray(apt.followUps)) {
       const lastFollowUp = apt.followUps[apt.followUps.length - 1];
@@ -220,7 +220,7 @@ const Dashboard = () => {
         return lastFollowUp.date || 'N/A';
       }
     }
-    
+
     // Check appointment status
     if (apt.status && (apt.status.toLowerCase().includes('purchased') || apt.status.toLowerCase().includes('complete'))) {
       // Find the date of the last follow-up or creation date
@@ -228,14 +228,14 @@ const Dashboard = () => {
         return apt.followUps[apt.followUps.length - 1].date || 'N/A';
       }
     }
-    
+
     return 'N/A';
   };
 
   // Helper function to get cancelled date from appointment
   const getCancelledDate = (apt) => {
     if (!apt) return 'N/A';
-    
+
     // Check if any product is cancelled
     if (apt.products && Array.isArray(apt.products)) {
       for (let product of apt.products) {
@@ -244,7 +244,7 @@ const Dashboard = () => {
         }
       }
     }
-    
+
     // Check if appointment is cancelled
     if (apt.status && apt.status.toLowerCase().includes('cancel')) {
       // Find the date of cancellation from follow-ups
@@ -258,7 +258,7 @@ const Dashboard = () => {
         return apt.followUps[apt.followUps.length - 1].date || 'N/A';
       }
     }
-    
+
     return 'N/A';
   };
 
@@ -491,17 +491,17 @@ const Dashboard = () => {
               Followups on:
             </p>
             <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
-              {new Date(selectedDate).toLocaleDateString('en-US', { 
-                weekday: 'short', 
-                year: 'numeric', 
-                month: 'short', 
-                day: 'numeric' 
+              {new Date(selectedDate).toLocaleDateString('en-US', {
+                weekday: 'short',
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
               })}
             </p>
             <p className="text-sm text-blue-600 dark:text-blue-400 mt-3 pb-3 border-b border-blue-200 dark:border-blue-700">
               Total: <span className="font-bold">{followupsForSelectedDate.length}</span>
             </p>
-            
+
             <div className="mt-3 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-600 dark:text-gray-400">Pending Follow-ups</span>
@@ -527,7 +527,7 @@ const Dashboard = () => {
               Followup Details
             </h2>
           </div>
-          
+
           {followupsForSelectedDate.length > 0 ? (
             <div className="flex flex-col">
               <div className="overflow-x-auto">
@@ -537,7 +537,8 @@ const Dashboard = () => {
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Sr</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Name</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Number</th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">First Visit Date</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Creation Date</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">1st Visit</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Product</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Salesman</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-900 dark:text-white">Follow Ups</th>
@@ -547,12 +548,12 @@ const Dashboard = () => {
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                     {followupsForSelectedDate.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map((apt, index) => {
-                      const firstProduct = apt.products && apt.products.length > 0 
+                      const firstProduct = apt.products && apt.products.length > 0
                         ? (apt.products[0].name || apt.products[0].productName || 'N/A')
                         : 'N/A';
-                      
-                      const followUpCount = apt.followUps && Array.isArray(apt.followUps) 
-                        ? apt.followUps.length 
+
+                      const followUpCount = apt.followUps && Array.isArray(apt.followUps)
+                        ? apt.followUps.length
                         : 0;
 
                       const purchaseDate = getPurchaseDate(apt);
@@ -572,6 +573,9 @@ const Dashboard = () => {
                         dateColor = 'font-semibold text-red-600 dark:text-red-400';
                       }
 
+                      // Robust mobile number extraction
+                      const displayMobile = apt.customerMobile || apt.mobileNumber || apt.mobile || apt.phone || apt.phoneNumber || apt.contactNumber || apt.contact || 'N/A';
+
                       return (
                         <tr key={apt.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                           <td className="px-6 py-4 text-sm font-semibold text-gray-900 dark:text-white">
@@ -581,10 +585,13 @@ const Dashboard = () => {
                             {apt.customerName || 'Unknown'}
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                            {apt.customerMobile || apt.mobileNumber || 'N/A'}
+                            {displayMobile}
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
                             {apt.createdDate || 'N/A'}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                            {apt.firstVisitDate || apt.date || 'N/A'}
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
                             {firstProduct}
@@ -603,13 +610,12 @@ const Dashboard = () => {
                             </span>
                           </td>
                           <td className="px-6 py-4 text-sm">
-                            <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${
-                              apt.status === 'Purchased' 
-                                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' 
+                            <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${apt.status === 'Purchased'
+                                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
                                 : apt.status === 'Pending'
-                                ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
-                                : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
-                            }`}>
+                                  ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+                                  : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                              }`}>
                               {apt.status || 'Unknown'}
                             </span>
                           </td>
@@ -635,7 +641,7 @@ const Dashboard = () => {
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </motion.button>
-                  
+
                   <div className="flex items-center gap-1">
                     {Array.from({ length: Math.ceil(followupsForSelectedDate.length / ITEMS_PER_PAGE) }, (_, i) => i + 1).map(page => (
                       <motion.button
@@ -643,11 +649,10 @@ const Dashboard = () => {
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                         onClick={() => setCurrentPage(page)}
-                        className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                          currentPage === page
+                        className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${currentPage === page
                             ? 'bg-primary text-white'
                             : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                        }`}
+                          }`}
                       >
                         {page}
                       </motion.button>
