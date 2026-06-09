@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Upload, Award, Package as PackageIcon, X, Edit2, Trash2, RefreshCw, Download } from 'lucide-react';
+import { Plus, Upload, Package as PackageIcon, X, Edit2, Trash2, RefreshCw, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 const ProductsEnhanced = () => {
